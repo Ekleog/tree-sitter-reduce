@@ -21,9 +21,8 @@ pub struct Opt {
     /// If this option is passed, then only the file passed to it will be reduced
     ///
     /// Pass multiple times to reduce only a specific list of files in the root path.
-    /// Paths are relative to the root path, by default all `.rs` files in the root
-    /// path will be reduced
-    // TODO: also support reducing the toml files, to remove external deps?
+    /// Paths are relative to the root path. By default all the files in the root path
+    /// that this program knows how to reduce, will be reduced.
     #[structopt(long = "file")]
     only_files: Option<Vec<PathBuf>>,
 

@@ -25,5 +25,8 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn list_files(_p: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    // TODO: Also support reducing the toml files, to remove external deps? This will
+    // need additional infra in tree-sitter-reduce, to support a different selection
+    // of passes per file type.
     todo!()
 }

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -61,6 +62,7 @@ pub fn run(
     // Handle the arguments
     let root = opt.canonicalized_root_path()?;
     let files = opt.files(filelist)?;
+    let files = files.into_iter().collect::<HashSet<PathBuf>>();
     let seed = opt.random_seed.unwrap_or_else(rand::random);
 
     // Sanity-checks

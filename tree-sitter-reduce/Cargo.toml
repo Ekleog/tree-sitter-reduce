@@ -7,6 +7,7 @@ edition = "2021"
 anyhow.workspace = true
 crossbeam-channel.workspace = true
 fs_extra.workspace = true
+fxhash.workspace = true
 rand.workspace = true
 structopt.workspace = true
 tempfile.workspace = true

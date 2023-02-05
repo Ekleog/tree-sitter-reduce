@@ -1,6 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
+use fxhash::FxHashMap;
 use rand::{rngs::StdRng, seq::SliceRandom, Rng};
 use tempfile::TempDir;
 
@@ -11,10 +12,35 @@ use crate::{
     Pass, Test,
 };
 
+struct FileInfo {
+    recent_success_rate: u8,
+}
+
+impl FileInfo {
+    fn new() -> FileInfo {
+        FileInfo {
+            recent_success_rate: u8::MAX / 2,
+        }
+    }
+
+    // (9 * self + MAX) / 10
+    fn record_success(&mut self) {
+        self.recent_success_rate =
+            u8::try_from((self.recent_success_rate as u32 * 9 + u8::MAX as u32) / 10).unwrap();
+    }
+
+    // (9 * self + 0) / 10
+    fn record_fail(&mut self) {
+        self.recent_success_rate = u8::try_from(self.recent_success_rate as u32 * 9 / 10).unwrap();
+    }
+}
+
 pub(crate) struct Runner<'a, T> {
     root: TempDir,
     test: Arc<T>,
-    files: Vec<PathBuf>,
+    // FxHashMap because we want deterministic iteration order, for
+    // random-based-on-printed-seed iteration order
+    files: FxHashMap<PathBuf, FileInfo>,
     passes: &'a [Arc<dyn Pass>],
     workers: Vec<Worker>,
     rng: StdRng,
@@ -24,7 +50,7 @@ impl<'a, T: Test> Runner<'a, T> {
     pub(crate) fn new(
         root: PathBuf,
         test: T,
-        files: Vec<PathBuf>,
+        files: HashSet<PathBuf>,
         passes: &'a [Arc<dyn Pass>],
         rng: StdRng,
         jobs: usize,
@@ -32,7 +58,7 @@ impl<'a, T: Test> Runner<'a, T> {
         let mut this = Runner {
             root: copy_to_tempdir(&root)?,
             test: Arc::new(test),
-            files,
+            files: files.into_iter().map(|f| (f, FileInfo::new())).collect(),
             passes,
             workers: Vec::with_capacity(jobs),
             rng,
@@ -57,13 +83,16 @@ impl<'a, T: Test> Runner<'a, T> {
     }
 
     fn make_job(&mut self) -> Job {
-        let path = self
-            .root
-            .path()
-            .join(self.files.choose(&mut self.rng).unwrap());
+        let (relpath, info) = self
+            .files
+            .iter()
+            .skip(self.rng.gen_range(0..self.files.len()))
+            .next()
+            .unwrap();
+        let path = self.root.path().join(relpath);
         let pass = self.passes.choose(&mut self.rng).unwrap().clone();
         let seed = self.rng.gen();
-        let recent_success_rate = 0; // TODO
+        let recent_success_rate = info.recent_success_rate;
         Job {
             path,
             pass,
@@ -109,6 +138,20 @@ impl<'a, T: Test> Runner<'a, T> {
     }
 
     fn handle_result(&mut self, job: Job, res: JobStatus) {
+        match res {
+            JobStatus::Reduced => {
+                self.files.get_mut(&job.path).unwrap().record_success();
+                self.handle_reduction(job);
+            }
+            JobStatus::DidNotReduce => {
+                self.files.get_mut(&job.path).unwrap().record_fail();
+            }
+            // TODO: do something to avoid trying this pass again on the same file just after?
+            JobStatus::PassFailed => (),
+        }
+    }
+
+    fn handle_reduction(&mut self, job: Job) {
         todo!()
     }
 }

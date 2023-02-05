@@ -24,7 +24,7 @@ pub struct Opt {
     /// Pass multiple times to reduce only a specific list of files in the root path.
     /// Paths are relative to the root path. By default all the files in the root path
     /// that this program knows how to reduce, will be reduced.
-    #[structopt(long = "file", default_value = "None")]
+    #[structopt(long = "file")]
     only_files: Option<Vec<PathBuf>>,
 
     /// The path to which to save snapshots

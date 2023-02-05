@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use tempfile::TempDir;
 
 use crate::{Pass, Test};
@@ -112,7 +112,7 @@ impl<'a, T: Test> Runner<'a, T> {
 
         // Spawn the workers
         for _ in 0..jobs {
-            this.spawn_worker();
+            this.spawn_worker()?;
         }
 
         Ok(this)
@@ -128,7 +128,14 @@ impl<'a, T: Test> Runner<'a, T> {
     fn make_job(&mut self) -> Job {
         let path = self.root.join(self.files.choose(&mut self.rng).unwrap());
         let pass = self.passes.choose(&mut self.rng).unwrap().clone();
-        todo!()
+        let seed = self.rng.gen();
+        let recent_success_rate = 0; // TODO
+        Job {
+            path,
+            pass,
+            seed,
+            recent_success_rate,
+        }
     }
 
     fn run(self) -> anyhow::Result<()> {

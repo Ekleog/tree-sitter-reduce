@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use tempfile::TempDir;
 
 use crate::{Pass, Test};
@@ -64,9 +64,16 @@ pub fn run(
     let root = opt.canonicalized_root_path()?;
     let files = opt.files(filelist)?;
     let seed = opt.random_seed.unwrap_or_else(rand::random);
+
+    // Sanity-checks
+    anyhow::ensure!(
+        !files.is_empty(),
+        "Cannot find any file to reduce in {root:?}"
+    );
+
+    // Actually run
     println!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
     let rng = StdRng::seed_from_u64(seed);
-
     Runner::new(root, test, files, passes, rng, opt.jobs)?.run()
 }
 
@@ -114,7 +121,8 @@ impl<'a, T: Test> Runner<'a, T> {
         Ok(())
     }
 
-    fn make_job(&self) -> Job {
+    fn make_job(&mut self) -> Job {
+        let path = self.root.join(self.files.choose(&mut self.rng).unwrap());
         todo!()
     }
 

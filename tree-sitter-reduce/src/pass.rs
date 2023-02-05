@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{fmt::Debug, path::Path};
 
 #[derive(Clone, Copy)]
 pub enum JobStatus {
@@ -7,7 +7,7 @@ pub enum JobStatus {
     PassFailed,
 }
 
-pub trait Pass: Send + Sync {
+pub trait Pass: Debug + Send + Sync {
     /// Prepare the root path for this pass
     ///
     /// This will be called with as argument the `root` passed to `run`. It should

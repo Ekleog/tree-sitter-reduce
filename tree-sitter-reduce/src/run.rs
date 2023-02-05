@@ -143,24 +143,45 @@ impl<'a, T: Test> Runner<'a, T> {
 
     fn run(mut self) -> anyhow::Result<()> {
         loop {
-            let w = self.wait_for_worker();
+            let w = self.wait_for_worker()?;
             todo!()
         }
     }
 
-    fn wait_for_worker(&mut self) -> &mut Worker {
-        // Receive the first message from a worker
-        let mut sel = crossbeam_channel::Select::new();
-        for w in &self.workers {
-            sel.recv(w.get_receiver());
+    fn wait_for_worker(&mut self) -> anyhow::Result<&mut Worker> {
+        loop {
+            // Receive the first message from a worker
+            let mut sel = crossbeam_channel::Select::new();
+            for w in &self.workers {
+                sel.recv(w.get_receiver());
+            }
+            let oper = sel.select();
+            let w = oper.index();
+            match oper
+                .recv(self.workers[w].get_receiver())
+                .expect("Workers should never disconnect first")
+            {
+                JobResult { job, res: Ok(res) } => {
+                    self.handle_result(job, res);
+                    return Ok(&mut self.workers[w]);
+                }
+                JobResult { job, res: Err(e) } => {
+                    eprintln!(
+                        "Worker died while processing a job! Starting a new worker…\nJob: {job:#?}\nError:\n---\n{e:#}\n---"
+                    );
+                    self.workers.swap_remove(w);
+                    self.spawn_worker()?;
+                }
+            }
         }
-        let oper = sel.select();
-        let w = oper.index();
-        let res = oper.recv(self.workers[w].get_receiver());
+    }
+
+    fn handle_result(&mut self, job: Job, res: JobStatus) {
         todo!()
     }
 }
 
+#[derive(Debug)]
 struct Job {
     path: PathBuf,
     pass: Arc<dyn Pass>,

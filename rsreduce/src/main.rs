@@ -25,8 +25,13 @@ fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
     // Rust testing needs no generic prep/cleanup
     let test = ShellTest::new(opt.test);
-    tree_sitter_reduce::run(opt.other_opts, list_files, test, &[Arc::new(RemoveLines)])
-    // TODO: add more interesting passes
+    tree_sitter_reduce::run(
+        opt.other_opts,
+        list_files,
+        test,
+        // TODO: add more interesting passes
+        &[Arc::new(RemoveLines { average: 20 })],
+    )
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

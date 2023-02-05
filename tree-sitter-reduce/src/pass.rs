@@ -22,7 +22,17 @@ pub trait Pass: Send + Sync {
     /// aggressive they want to be. Basically, the number will get closer to `u8::MAX`
     /// if recent passes have led to successful reductions, and closer to `0` if recent
     /// passes have failed to reduce the file size.
-    fn reduce(&self, path: &Path, random_seed: u64, recent_success_rate: u8) -> anyhow::Result<()>;
+    ///
+    /// This function is expected to return `true` if it successfully reduced the input,
+    /// and `false` if the current input cannot be handled by this pass. Returning errors
+    /// should be reserved to situations where the pass crashed midways and the whole
+    /// directory needs to be reset.
+    fn reduce(
+        &self,
+        path: &Path,
+        random_seed: u64,
+        recent_success_rate: u8,
+    ) -> anyhow::Result<bool>;
 
     /// Cleanup the root path after this pass' test ran
     ///

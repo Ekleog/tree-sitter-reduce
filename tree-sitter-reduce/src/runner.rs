@@ -155,6 +155,8 @@ impl<'a, T: Test> Runner<'a, T> {
                 .expect("Workers should never disconnect first")
             {
                 JobResult { job, res: Ok(res) } => {
+                    // TODO: turn into one indicatif progress bar per worker
+                    println!("Worker finished running with result {res:?} for job {job:?}");
                     self.handle_result(w, job, res)?;
                     return Ok(Some(&mut self.workers[w]));
                 }

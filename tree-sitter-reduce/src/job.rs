@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use crate::Pass;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum JobStatus {
     Reduced,
     DidNotReduce,

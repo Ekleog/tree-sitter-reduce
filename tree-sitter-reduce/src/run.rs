@@ -68,7 +68,11 @@ pub fn run(
     // Sanity-checks
     anyhow::ensure!(
         !files.is_empty(),
-        "Cannot find any file to reduce in {root:?}"
+        "Cannot find any file to reduce in {root:?}",
+    );
+    anyhow::ensure!(
+        !passes.is_empty(),
+        "Ill-configured runner: no passes are configured",
     );
 
     // Actually run
@@ -123,6 +127,7 @@ impl<'a, T: Test> Runner<'a, T> {
 
     fn make_job(&mut self) -> Job {
         let path = self.root.join(self.files.choose(&mut self.rng).unwrap());
+        let pass = self.passes.choose(&mut self.rng).unwrap().clone();
         todo!()
     }
 

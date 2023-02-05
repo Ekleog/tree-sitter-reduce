@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
+use rand::SeedableRng;
 use tempfile::TempDir;
 
 use crate::{Pass, Test};
@@ -29,6 +30,10 @@ pub struct Opt {
     /// Number of interestingness tests to run in parallel
     #[structopt(long, short, default_value = "4")]
     jobs: usize,
+
+    /// Seed for the random number generation
+    #[structopt(long)]
+    random_seed: Option<u64>,
 }
 
 impl Opt {
@@ -60,12 +65,16 @@ pub fn run(
     opt.canonicalize_root_path()?;
     let _files = opt.files(filelist)?;
     let test = Arc::new(test);
+    let seed = opt.random_seed.unwrap_or_else(rand::random);
+    println!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
+    let rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     // Spawn the workers
     let mut workers = Vec::new();
     for _ in 0..opt.jobs {
         workers.push(Worker::new(&opt.root_path, test.clone()).context("spinning up worker")?);
     }
+
     todo!()
 }
 

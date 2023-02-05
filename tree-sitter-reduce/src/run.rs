@@ -90,21 +90,26 @@ impl<T: Test> Runner<T> {
     ) -> anyhow::Result<Self> {
         let test = Arc::new(test);
 
-        // Spawn the workers
-        let mut workers = Vec::new();
-        for _ in 0..jobs {
-            let worker = Worker::new(&root, test.clone()).context("spinning up a worker")?;
-            worker.submit(todo!());
-            workers.push(worker);
-        }
-
-        Ok(Runner {
+        let mut this = Runner {
             root,
             test,
             files,
-            workers,
+            workers: Vec::with_capacity(jobs),
             rng,
-        })
+        };
+
+        // Spawn the workers
+        for _ in 0..jobs {
+            this.spawn_worker();
+        }
+
+        Ok(this)
+    }
+
+    fn spawn_worker(&mut self) -> anyhow::Result<()> {
+        let worker = Worker::new(&self.root, self.test.clone()).context("spinning up a worker")?;
+        worker.submit(todo!());
+        self.workers.push(worker);
     }
 }
 

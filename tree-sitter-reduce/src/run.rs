@@ -67,9 +67,7 @@ pub fn run(
     println!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
     let rng = StdRng::seed_from_u64(seed);
 
-    Runner::new(root, test, files, rng, opt.jobs)?;
-
-    todo!()
+    Runner::new(root, test, files, rng, opt.jobs)?.run()
 }
 
 struct Runner<T> {
@@ -108,8 +106,17 @@ impl<T: Test> Runner<T> {
 
     fn spawn_worker(&mut self) -> anyhow::Result<()> {
         let worker = Worker::new(&self.root, self.test.clone()).context("spinning up a worker")?;
-        worker.submit(todo!());
+        worker.submit(self.make_job());
         self.workers.push(worker);
+        Ok(())
+    }
+
+    fn make_job(&self) -> Job {
+        todo!()
+    }
+
+    fn run(self) -> anyhow::Result<()> {
+        todo!()
     }
 }
 

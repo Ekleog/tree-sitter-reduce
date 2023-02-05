@@ -53,37 +53,45 @@ impl Opt {
 pub fn run(
     mut opt: Opt,
     filelist: impl Fn(&Path) -> anyhow::Result<Vec<PathBuf>>,
-    _test: impl Test,
+    test: impl Test,
     _passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
+    // Handle the arguments
     opt.canonicalize_root_path()?;
     let _files = opt.files(filelist)?;
+    let test = Arc::new(test);
+
+    // Spawn the workers
     let mut workers = Vec::new();
     for _ in 0..opt.jobs {
-        workers.push(Worker::new(&opt.root_path).context("spinning up worker")?);
+        workers.push(Worker::new(&opt.root_path, test.clone()).context("spinning up worker")?);
     }
     todo!()
 }
 
 struct Job {
+    path: PathBuf,
     pass: Arc<dyn Pass>,
     seed: u64,
+    recent_success_rate: u8,
 }
 
 struct Worker {
+    #[allow(dead_code)] // `dir` needs to be kept alive for the temporary directory to stay there
     dir: TempDir,
     sender: crossbeam_channel::Sender<Job>,
     receiver: crossbeam_channel::Receiver<anyhow::Result<bool>>,
 }
 
-struct WorkerThread {
+struct WorkerThread<T> {
     dir: PathBuf,
+    test: Arc<T>,
     receiver: crossbeam_channel::Receiver<Job>,
     sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
 }
 
 impl Worker {
-    fn new(root: &Path) -> anyhow::Result<Self> {
+    fn new(root: &Path, test: Arc<impl Test>) -> anyhow::Result<Self> {
         // First, copy the target into a directory
         let dir = tempfile::Builder::new()
             .prefix("tree-sitter-reduce-")
@@ -103,7 +111,8 @@ impl Worker {
         // Finally, spawn a thread!
         std::thread::spawn({
             let dir = dir.path().to_path_buf();
-            move || WorkerThread::new(dir, worker_receiver, worker_sender).run()
+            let test = test.clone();
+            move || WorkerThread::new(dir, test, worker_receiver, worker_sender).run()
         });
         Ok(Worker {
             dir,
@@ -123,22 +132,35 @@ impl Worker {
     }
 }
 
-impl WorkerThread {
+impl<T: Test> WorkerThread<T> {
     fn new(
         dir: PathBuf,
+        test: Arc<T>,
         receiver: crossbeam_channel::Receiver<Job>,
         sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
     ) -> Self {
         Self {
             dir,
+            test,
             receiver,
             sender,
         }
     }
 
     fn run(self) {
-        for job in self.receiver.into_iter() {
-            todo!()
+        for job in self.receiver.iter() {
+            self.sender
+                .try_send(self.run_job(job))
+                .expect("Main thread submitted a job before reading the previous result");
         }
+    }
+
+    fn run_job(&self, job: Job) -> anyhow::Result<bool> {
+        job.pass.prepare(&self.dir)?;
+        job.pass
+            .reduce(&job.path, job.seed, job.recent_success_rate)?;
+        let res = self.test.test_interesting(&self.dir)?;
+        job.pass.cleanup(&self.dir, res)?;
+        Ok(res)
     }
 }

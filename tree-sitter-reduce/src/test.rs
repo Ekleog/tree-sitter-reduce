@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-pub trait Test {
+pub trait Test: 'static + Send + Sync {
     /// Run the test
     ///
     /// Returns `Err` in case an error made it impossible to know whether the current
@@ -39,8 +39,8 @@ impl<PrepFn, CleanFn> ShellTest<PrepFn, CleanFn> {
 
 impl<PrepFn, CleanFn> Test for ShellTest<PrepFn, CleanFn>
 where
-    PrepFn: Fn() -> anyhow::Result<()>,
-    CleanFn: Fn() -> anyhow::Result<()>,
+    PrepFn: 'static + Send + Sync + Fn() -> anyhow::Result<()>,
+    CleanFn: 'static + Send + Sync + Fn() -> anyhow::Result<()>,
 {
     fn test_interesting(&self, root: &Path) -> anyhow::Result<bool> {
         (self.prep)()?;

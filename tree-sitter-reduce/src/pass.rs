@@ -1,11 +1,6 @@
 use std::{fmt::Debug, path::Path};
 
-#[derive(Clone, Copy)]
-pub enum JobStatus {
-    Reduced,
-    DidNotReduce,
-    PassFailed,
-}
+use crate::job::JobStatus;
 
 pub trait Pass: Debug + Send + Sync {
     /// Prepare the root path for this pass

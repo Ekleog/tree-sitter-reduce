@@ -7,7 +7,7 @@ use anyhow::Context;
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use tempfile::TempDir;
 
-use crate::{Pass, Test};
+use crate::{pass::JobStatus, Pass, Test};
 
 #[derive(Debug, structopt::StructOpt)]
 pub struct Opt {
@@ -141,7 +141,22 @@ impl<'a, T: Test> Runner<'a, T> {
         }
     }
 
-    fn run(self) -> anyhow::Result<()> {
+    fn run(mut self) -> anyhow::Result<()> {
+        loop {
+            let w = self.wait_for_worker();
+            todo!()
+        }
+    }
+
+    fn wait_for_worker(&mut self) -> &mut Worker {
+        // Receive the first message from a worker
+        let mut sel = crossbeam_channel::Select::new();
+        for w in &self.workers {
+            sel.recv(w.get_receiver());
+        }
+        let oper = sel.select();
+        let w = oper.index();
+        let res = oper.recv(self.workers[w].get_receiver());
         todo!()
     }
 }
@@ -153,16 +168,21 @@ struct Job {
     recent_success_rate: u8,
 }
 
+struct JobResult {
+    job: Job,
+    res: anyhow::Result<JobStatus>,
+}
+
 struct Worker {
     sender: crossbeam_channel::Sender<Job>,
-    receiver: crossbeam_channel::Receiver<anyhow::Result<bool>>,
+    receiver: crossbeam_channel::Receiver<JobResult>,
 }
 
 struct WorkerThread<T> {
     dir: TempDir,
     test: Arc<T>,
     receiver: crossbeam_channel::Receiver<Job>,
-    sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
+    sender: crossbeam_channel::Sender<JobResult>,
 }
 
 impl Worker {
@@ -188,7 +208,7 @@ impl Worker {
             .expect("Tried to send a job while the previous job was not done yet")
     }
 
-    fn get_receiver(&self) -> &crossbeam_channel::Receiver<anyhow::Result<bool>> {
+    fn get_receiver(&self) -> &crossbeam_channel::Receiver<JobResult> {
         &self.receiver
     }
 }
@@ -198,7 +218,7 @@ impl<T: Test> WorkerThread<T> {
         dir: TempDir,
         test: Arc<T>,
         receiver: crossbeam_channel::Receiver<Job>,
-        sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
+        sender: crossbeam_channel::Sender<JobResult>,
     ) -> Self {
         Self {
             dir,
@@ -216,13 +236,38 @@ impl<T: Test> WorkerThread<T> {
         }
     }
 
-    fn run_job(&self, job: Job) -> anyhow::Result<bool> {
-        job.pass.prepare(self.dir.path())?;
-        job.pass
-            .reduce(&job.path, job.seed, job.recent_success_rate)?;
-        let res = self.test.test_interesting(self.dir.path())?;
-        job.pass.cleanup(self.dir.path(), res)?;
-        Ok(res)
+    fn run_job(&self, job: Job) -> JobResult {
+        match job.pass.prepare(self.dir.path()) {
+            Ok(()) => (),
+            Err(e) => return JobResult { job, res: Err(e) },
+        };
+
+        match job
+            .pass
+            .reduce(&job.path, job.seed, job.recent_success_rate)
+        {
+            Ok(true) => (),
+            Ok(false) => {
+                return JobResult {
+                    job,
+                    res: Ok(JobStatus::PassFailed),
+                }
+            }
+            Err(e) => return JobResult { job, res: Err(e) },
+        };
+
+        let res = match self.test.test_interesting(self.dir.path()) {
+            Ok(true) => JobStatus::Reduced,
+            Ok(false) => JobStatus::DidNotReduce,
+            Err(e) => return JobResult { job, res: Err(e) },
+        };
+
+        match job.pass.cleanup(self.dir.path(), res) {
+            Ok(()) => (),
+            Err(e) => return JobResult { job, res: Err(e) },
+        };
+
+        JobResult { job, res: Ok(res) }
     }
 }
 

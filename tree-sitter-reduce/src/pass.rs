@@ -1,5 +1,12 @@
 use std::path::Path;
 
+#[derive(Clone, Copy)]
+pub enum JobStatus {
+    Reduced,
+    DidNotReduce,
+    PassFailed,
+}
+
 pub trait Pass: Send + Sync {
     /// Prepare the root path for this pass
     ///
@@ -40,7 +47,7 @@ pub trait Pass: Send + Sync {
     /// whether the run was actually interesting. For instance, a pass reducing
     /// `Cargo.toml` dependencies could use it to determine which of the `target`
     /// directories to keep.
-    fn cleanup(&self, root: &Path, was_interesting: bool) -> anyhow::Result<()> {
+    fn cleanup(&self, root: &Path, was_interesting: JobStatus) -> anyhow::Result<()> {
         let _ = (root, was_interesting);
         Ok(())
     }

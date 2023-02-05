@@ -1,6 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{mpsc, Arc},
+};
 
 use anyhow::Context;
+use tempfile::TempDir;
 
 use crate::{Pass, Test};
 
@@ -50,7 +54,7 @@ pub fn run(
     mut opt: Opt,
     filelist: impl Fn(&Path) -> anyhow::Result<Vec<PathBuf>>,
     _test: impl Test,
-    _passes: &[&dyn Pass],
+    _passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
     opt.canonicalize_root_path()?;
     let _files = opt.files(filelist)?;
@@ -61,7 +65,16 @@ pub fn run(
     todo!()
 }
 
-struct Worker {}
+struct Job {
+    pass: Arc<dyn Pass>,
+    seed: u64,
+}
+
+struct Worker {
+    dir: TempDir,
+    receiver: mpsc::Receiver<Job>,
+    sender: mpsc::Sender<anyhow::Result<bool>>,
+}
 
 impl Worker {
     fn new(root: &Path) -> anyhow::Result<Self> {
@@ -76,6 +89,15 @@ impl Worker {
             &fs_extra::dir::CopyOptions::default().content_only(true),
         )
         .with_context(|| format!("copying source from {root:?} to {:?}", dir.path()))?;
-        todo!()
+
+        // Then, prepare the communications channels
+        let (sender, worker_receiver) = mpsc::channel();
+        let (worker_sender, receiver) = mpsc::channel();
+        // todo!();
+        Ok(Worker {
+            dir,
+            receiver,
+            sender,
+        })
     }
 }

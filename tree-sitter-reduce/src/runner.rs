@@ -7,7 +7,7 @@ use tempfile::TempDir;
 
 use crate::{
     job::{Job, JobResult, JobStatus},
-    util::{copy_to_tempdir, WORKDIR},
+    util::{copy_dir_contents, copy_to_tempdir, WORKDIR},
     workers::Worker,
     Pass, Test,
 };
@@ -194,6 +194,13 @@ impl<'a, T: Test> Runner<'a, T> {
     }
 
     fn snapshot(&self) -> anyhow::Result<()> {
-        todo!()
+        let snap_dir = self
+            .snap_dir
+            .join(format!("{:?}", std::time::SystemTime::now()));
+        let workdir = self.root.path().join(WORKDIR);
+        std::fs::create_dir(&snap_dir)
+            .with_context(|| format!("creating snapshot directory {snap_dir:?}"))?;
+        copy_dir_contents(&workdir, &snap_dir)?;
+        Ok(())
     }
 }

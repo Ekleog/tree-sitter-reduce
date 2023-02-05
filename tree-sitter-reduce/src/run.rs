@@ -76,6 +76,12 @@ struct Worker {
     receiver: mpsc::Receiver<anyhow::Result<bool>>,
 }
 
+struct WorkerThread {
+    dir: PathBuf,
+    receiver: mpsc::Receiver<Job>,
+    sender: mpsc::Sender<anyhow::Result<bool>>,
+}
+
 impl Worker {
     fn new(root: &Path) -> anyhow::Result<Self> {
         // First, copy the target into a directory
@@ -97,7 +103,7 @@ impl Worker {
         // Finally, spawn a thread!
         std::thread::spawn({
             let dir = dir.path().to_path_buf();
-            move || WorkerThread::new(worker_receiver, worker_sender).run()
+            move || WorkerThread::new(dir, worker_receiver, worker_sender).run()
         });
         Ok(Worker {
             dir,
@@ -107,17 +113,22 @@ impl Worker {
     }
 }
 
-struct WorkerThread {
-    receiver: mpsc::Receiver<Job>,
-    sender: mpsc::Sender<anyhow::Result<bool>>,
-}
-
 impl WorkerThread {
-    fn new(receiver: mpsc::Receiver<Job>, sender: mpsc::Sender<anyhow::Result<bool>>) -> Self {
-        Self { receiver, sender }
+    fn new(
+        dir: PathBuf,
+        receiver: mpsc::Receiver<Job>,
+        sender: mpsc::Sender<anyhow::Result<bool>>,
+    ) -> Self {
+        Self {
+            dir,
+            receiver,
+            sender,
+        }
     }
 
-    fn run(&mut self) {
-        todo!()
+    fn run(self) {
+        for job in self.receiver.into_iter() {
+            todo!()
+        }
     }
 }

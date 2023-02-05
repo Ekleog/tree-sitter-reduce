@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+crossbeam-channel.workspace = true
 fs_extra.workspace = true
 structopt.workspace = true
 tempfile.workspace = true

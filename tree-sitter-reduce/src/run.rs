@@ -1,6 +1,6 @@
 use std::{
     path::{Path, PathBuf},
-    sync::{mpsc, Arc},
+    sync::Arc,
 };
 
 use anyhow::Context;
@@ -72,14 +72,14 @@ struct Job {
 
 struct Worker {
     dir: TempDir,
-    sender: mpsc::Sender<Job>,
-    receiver: mpsc::Receiver<anyhow::Result<bool>>,
+    sender: crossbeam_channel::Sender<Job>,
+    receiver: crossbeam_channel::Receiver<anyhow::Result<bool>>,
 }
 
 struct WorkerThread {
     dir: PathBuf,
-    receiver: mpsc::Receiver<Job>,
-    sender: mpsc::Sender<anyhow::Result<bool>>,
+    receiver: crossbeam_channel::Receiver<Job>,
+    sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
 }
 
 impl Worker {
@@ -97,8 +97,8 @@ impl Worker {
         .with_context(|| format!("copying source from {root:?} to {:?}", dir.path()))?;
 
         // Then, prepare the communications channels
-        let (sender, worker_receiver) = mpsc::channel();
-        let (worker_sender, receiver) = mpsc::channel();
+        let (sender, worker_receiver) = crossbeam_channel::bounded(1);
+        let (worker_sender, receiver) = crossbeam_channel::bounded(1);
 
         // Finally, spawn a thread!
         std::thread::spawn({
@@ -116,8 +116,8 @@ impl Worker {
 impl WorkerThread {
     fn new(
         dir: PathBuf,
-        receiver: mpsc::Receiver<Job>,
-        sender: mpsc::Sender<anyhow::Result<bool>>,
+        receiver: crossbeam_channel::Receiver<Job>,
+        sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
     ) -> Self {
         Self {
             dir,

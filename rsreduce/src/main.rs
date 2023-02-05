@@ -13,19 +13,8 @@ struct Opt {
     /// crash.
     test: PathBuf,
 
-    /// Path to the root of the crate (or workspace)
-    ///
-    /// The interestingness test will be run in a copy this folder.
-    root_path: PathBuf,
-
-    /// If this option is passed, then only the file passed to it will be reduced
-    ///
-    /// Pass multiple times to reduce only a specific list of files in the root path.
-    /// Paths are relative to the root path, by default all `.rs` files in the root
-    /// path will be reduced
-    // TODO: also support reducing the toml files, to remove external deps?
-    #[structopt(long = "file")]
-    only_files: Option<Vec<PathBuf>>,
+    #[structopt(flatten)]
+    other_opts: tree_sitter_reduce::Opt,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -33,5 +22,5 @@ fn main() -> anyhow::Result<()> {
     // Rust testing needs no generic prep/cleanup
     let test = ShellTest::new(opt.test);
     // TODO: remove unwrap below
-    tree_sitter_reduce::run(opt.root_path, opt.only_files.unwrap(), test, &[])
+    tree_sitter_reduce::run(opt.other_opts, test, &[])
 }

@@ -6,6 +6,9 @@ pub trait Test {
     /// Returns `Err` in case an error made it impossible to know whether the current
     /// state is interesting. Returns `Ok(true)` if the current state is interesting,
     /// and `Ok(false)` if not.
+    ///
+    /// Note that if this returns `Err` then the current checkout will be considered
+    /// broken and removed, so it should avoid doing so whenever possible.
     fn test_interesting(&self, root: &Path) -> anyhow::Result<bool>;
 }
 
@@ -34,8 +37,19 @@ impl<PrepFn, CleanFn> ShellTest<PrepFn, CleanFn> {
     }
 }
 
-impl<PrepFn, CleanFn> Test for ShellTest<PrepFn, CleanFn> {
-    fn test_interesting(&self, _root: &Path) -> anyhow::Result<bool> {
-        todo!()
+impl<PrepFn, CleanFn> Test for ShellTest<PrepFn, CleanFn>
+where
+    PrepFn: Fn() -> anyhow::Result<()>,
+    CleanFn: Fn() -> anyhow::Result<()>,
+{
+    fn test_interesting(&self, root: &Path) -> anyhow::Result<bool> {
+        (self.prep)()?;
+        let res = std::process::Command::new(&self.test)
+            .current_dir(root)
+            .output()?
+            .status
+            .success();
+        (self.clean)()?;
+        Ok(res)
     }
 }

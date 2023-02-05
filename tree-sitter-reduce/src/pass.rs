@@ -1,6 +1,6 @@
 use std::path::Path;
 
-pub trait Pass {
+pub trait Pass: Send + Sync {
     /// Prepare the root path for this pass
     ///
     /// This will be called with as argument the `root` passed to `run`. It should

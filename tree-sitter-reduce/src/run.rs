@@ -72,15 +72,15 @@ struct Job {
 
 struct Worker {
     dir: TempDir,
-    receiver: mpsc::Receiver<Job>,
-    sender: mpsc::Sender<anyhow::Result<bool>>,
+    sender: mpsc::Sender<Job>,
+    receiver: mpsc::Receiver<anyhow::Result<bool>>,
 }
 
 impl Worker {
     fn new(root: &Path) -> anyhow::Result<Self> {
         // First, copy the target into a directory
         let dir = tempfile::Builder::new()
-            .prefix("tree-sitter-reduce")
+            .prefix("tree-sitter-reduce-")
             .tempdir()
             .context("creating temporary directory")?;
         fs_extra::dir::copy(
@@ -93,11 +93,31 @@ impl Worker {
         // Then, prepare the communications channels
         let (sender, worker_receiver) = mpsc::channel();
         let (worker_sender, receiver) = mpsc::channel();
-        // todo!();
+
+        // Finally, spawn a thread!
+        std::thread::spawn({
+            let dir = dir.path().to_path_buf();
+            move || WorkerThread::new(worker_receiver, worker_sender).run()
+        });
         Ok(Worker {
             dir,
             receiver,
             sender,
         })
+    }
+}
+
+struct WorkerThread {
+    receiver: mpsc::Receiver<Job>,
+    sender: mpsc::Sender<anyhow::Result<bool>>,
+}
+
+impl WorkerThread {
+    fn new(receiver: mpsc::Receiver<Job>, sender: mpsc::Sender<anyhow::Result<bool>>) -> Self {
+        Self { receiver, sender }
+    }
+
+    fn run(&mut self) {
+        todo!()
     }
 }

@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::Context;
@@ -23,8 +24,30 @@ pub struct Opt {
     /// Pass multiple times to reduce only a specific list of files in the root path.
     /// Paths are relative to the root path. By default all the files in the root path
     /// that this program knows how to reduce, will be reduced.
-    #[structopt(long = "file")]
+    #[structopt(long = "file", default_value = "None")]
     only_files: Option<Vec<PathBuf>>,
+
+    /// The path to which to save snapshots
+    ///
+    /// This is where you should look to check whether the reducer managed to reduce
+    /// enough to your taste, or whether you should keep it running for a while longer.
+    ///
+    /// Inside, the reducer will write folders that are reduced copies of the root
+    /// folder, each folder name being the timestamp of the snapshot.
+    #[structopt(long)]
+    snapshot_directory: PathBuf,
+
+    /// At which frequency (in seconds) to snapshot the state of reduction
+    ///
+    /// Note that if no reduction happened, then no snapshot will be taken. This can
+    /// thus be set to 0 in order to snapshot every single time a reduction is found,
+    /// which can be helpful for debugging the reducer itself.
+    ///
+    /// By default, snapshots will be taken every 10 seconds, which should be fine
+    /// for most use cases. But if you have little disk space, or try to minimize a
+    /// huge directory that gets reduced a lot, it could make sense to increase it.
+    #[structopt(long, default_value = "10")]
+    snapshot_interval: u64,
 
     /// Number of interestingness tests to run in parallel
     #[structopt(long, short, default_value = "4")]
@@ -74,9 +97,23 @@ pub fn run(
         !passes.is_empty(),
         "Ill-configured runner: no passes are configured",
     );
+    if opt.snapshot_interval > 300 {
+        eprintln!("WARNING: You set snapshot interval to more than 5 minutes.");
+        eprintln!("WARNING: This usually slows down the time to receive the results, without getting anything in return");
+    }
 
     // Actually run
     println!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
     let rng = StdRng::seed_from_u64(seed);
-    Runner::new(root, test, files, passes, rng, opt.jobs)?.run()
+    Runner::new(
+        root,
+        test,
+        files,
+        passes,
+        opt.snapshot_directory,
+        Duration::from_secs(opt.snapshot_interval),
+        rng,
+        opt.jobs,
+    )?
+    .run()
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use fxhash::FxHashMap;
@@ -42,6 +42,8 @@ pub(crate) struct Runner<'a, T> {
     // random-based-on-printed-seed iteration order
     files: FxHashMap<PathBuf, FileInfo>,
     passes: &'a [Arc<dyn Pass>],
+    snap_dir: PathBuf,
+    snap_interval: Duration,
     workers: Vec<Worker>,
     rng: StdRng,
 }
@@ -52,6 +54,8 @@ impl<'a, T: Test> Runner<'a, T> {
         test: T,
         files: HashSet<PathBuf>,
         passes: &'a [Arc<dyn Pass>],
+        snap_dir: PathBuf,
+        snap_interval: Duration,
         rng: StdRng,
         jobs: usize,
     ) -> anyhow::Result<Self> {
@@ -60,13 +64,13 @@ impl<'a, T: Test> Runner<'a, T> {
             test: Arc::new(test),
             files: files.into_iter().map(|f| (f, FileInfo::new())).collect(),
             passes,
+            snap_dir,
+            snap_interval,
             workers: Vec::with_capacity(jobs),
             rng,
         };
 
-        println!("Finished copying target directory, running…");
-
-        // Spawn the workers
+        println!("Finished copying target directory, starting the reducing…");
         for _ in 0..jobs {
             this.spawn_worker()?;
         }
@@ -102,21 +106,40 @@ impl<'a, T: Test> Runner<'a, T> {
     }
 
     pub(crate) fn run(mut self) -> anyhow::Result<()> {
+        let mut next_snap = std::time::Instant::now() + self.snap_interval;
         loop {
             let next_job = self.make_job();
-            self.wait_for_worker()?.submit(next_job);
-            todo!() // Do regular snapshotting of current status
+            match self.wait_for_worker(next_snap)? {
+                Some(w) => w.submit(next_job),
+                None => (),
+            }
+            if next_snap
+                .checked_duration_since(std::time::Instant::now())
+                .is_some()
+            {
+                // We have passed next snap time!
+                self.snapshot()?;
+                next_snap += self.snap_interval;
+            }
         }
     }
 
-    fn wait_for_worker(&mut self) -> anyhow::Result<&mut Worker> {
+    fn wait_for_worker(
+        &mut self,
+        deadline: std::time::Instant,
+    ) -> anyhow::Result<Option<&mut Worker>> {
         loop {
-            // Receive the first message from a worker
+            // Find the first worker with a message
             let mut sel = crossbeam_channel::Select::new();
             for w in &self.workers {
                 sel.recv(w.get_receiver());
             }
-            let oper = sel.select();
+            let oper = match sel.select_deadline(deadline) {
+                Ok(oper) => oper,
+                Err(crossbeam_channel::SelectTimeoutError) => return Ok(None),
+            };
+
+            // Read its message and act upon it
             let w = oper.index();
             match oper
                 .recv(self.workers[w].get_receiver())
@@ -124,7 +147,7 @@ impl<'a, T: Test> Runner<'a, T> {
             {
                 JobResult { job, res: Ok(res) } => {
                     self.handle_result(w, job, res)?;
-                    return Ok(&mut self.workers[w]);
+                    return Ok(Some(&mut self.workers[w]));
                 }
                 JobResult { job, res: Err(e) } => {
                     eprintln!(
@@ -168,5 +191,9 @@ impl<'a, T: Test> Runner<'a, T> {
             format!("copying successful reduction from {workerdir:?} to {my_dir:?}")
         })?;
         Ok(())
+    }
+
+    fn snapshot(&self) -> anyhow::Result<()> {
+        todo!()
     }
 }

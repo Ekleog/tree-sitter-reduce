@@ -87,16 +87,25 @@ pub fn run(
     let files = opt.files(filelist)?;
     let files = files.into_iter().collect::<HashSet<PathBuf>>();
     let seed = opt.random_seed.unwrap_or_else(rand::random);
+    let snap_dir = opt.snapshot_directory;
 
     // Sanity-checks
-    anyhow::ensure!(
-        !files.is_empty(),
-        "Cannot find any file to reduce in {root:?}",
-    );
     anyhow::ensure!(
         !passes.is_empty(),
         "Ill-configured runner: no passes are configured",
     );
+    anyhow::ensure!(
+        !files.is_empty(),
+        "Cannot find any file to reduce in {root:?}",
+    );
+    {
+        let testdir = snap_dir.join("test");
+        std::fs::create_dir(&testdir).with_context(|| {
+            format!("checking whether the snapshot directory {snap_dir:?} is writable")
+        })?;
+        std::fs::remove_dir(&testdir)
+            .with_context(|| format!("removing test directory {testdir:?}"))?;
+    }
     if opt.snapshot_interval > 300 {
         eprintln!("WARNING: You set snapshot interval to more than 5 minutes.");
         eprintln!("WARNING: This usually slows down the time to receive the results, without getting anything in return");
@@ -110,7 +119,7 @@ pub fn run(
         test,
         files,
         passes,
-        opt.snapshot_directory,
+        snap_dir,
         Duration::from_secs(opt.snapshot_interval),
         rng,
         opt.jobs,

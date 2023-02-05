@@ -39,7 +39,7 @@ pub(crate) struct Runner<'a, T> {
     root: TempDir,
     test: Arc<T>,
     // FxHashMap because we want deterministic iteration order, for
-    // random-based-on-printed-seed iteration order
+    // random-based-on-printed-seed-only iteration order
     files: FxHashMap<PathBuf, FileInfo>,
     passes: &'a [Arc<dyn Pass>],
     snap_dir: PathBuf,

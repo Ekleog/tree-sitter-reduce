@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "tree-sitter-reduce",
+]
+
+[workspace.dependencies]
+tree-sitter-reduce = { path = "./tree-sitter-reduce" }

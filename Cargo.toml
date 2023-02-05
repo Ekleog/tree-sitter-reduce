@@ -13,3 +13,4 @@ rand = "0.8.5"
 structopt = "0.3.26"
 tempfile = "3.3"
 tree-sitter-reduce = { path = "./tree-sitter-reduce" }
+walkdir = "2.3"

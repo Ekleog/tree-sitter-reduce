@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
 use structopt::StructOpt;
 use tree_sitter_reduce::ShellTest;
 
@@ -24,9 +25,17 @@ fn main() -> anyhow::Result<()> {
     tree_sitter_reduce::run(opt.other_opts, list_files, test, &[]) // TODO: add passes
 }
 
-fn list_files(_p: &Path) -> anyhow::Result<Vec<PathBuf>> {
+fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
     // TODO: Also support reducing the toml files, to remove external deps? This will
     // need additional infra in tree-sitter-reduce, to support a different selection
     // of passes per file type.
-    todo!()
+    let mut res = Vec::new();
+    for file in walkdir::WalkDir::new(root) {
+        let file = file.with_context(|| format!("walking directory {root:?} looking for rust files"))?;
+        if file.file_type().is_file() && file.file_name().to_string_lossy().ends_with(".rs") {
+            println!("Found file to reduce: {:?}", file.path()); // TODO: make optional based on verbosity
+            res.push(file.path().to_path_buf());
+        }
+    }
+    Ok(res)
 }

@@ -123,7 +123,7 @@ impl<T: Test> WorkerThread<T> {
             Ok(false) => JobStatus::DidNotReduce,
             Err(e) => {
                 return JobResult {
-                    res: Err(e).with_context(|| format!("running after pass {job:?}")),
+                    res: Err(e).with_context(|| format!("running test (after pass {job:?})")),
                     job,
                 }
             }

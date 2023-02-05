@@ -23,8 +23,12 @@ struct Opt {
 
 fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
+    let test = opt
+        .test
+        .canonicalize()
+        .with_context(|| format!("canonicalizing path {:?}", opt.test))?;
     // Rust testing needs no generic prep/cleanup
-    let test = ShellTest::new(opt.test);
+    let test = ShellTest::new(test);
     tree_sitter_reduce::run(
         opt.other_opts,
         list_files,

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub trait Test {
     /// Run the test
@@ -9,9 +9,32 @@ pub trait Test {
     fn test_interesting(&self, root: &Path) -> anyhow::Result<bool>;
 }
 
-pub struct ShellTest;
+pub struct ShellTest<PrepFn, CleanFn> {
+    prep: PrepFn,
+    test: PathBuf,
+    clean: CleanFn,
+}
 
-impl Test for ShellTest {
+impl ShellTest<fn() -> anyhow::Result<()>, fn() -> anyhow::Result<()>> {
+    pub fn new(test: PathBuf) -> Self {
+        fn noop() -> anyhow::Result<()> {
+            Ok(())
+        }
+        Self {
+            prep: noop,
+            test,
+            clean: noop,
+        }
+    }
+}
+
+impl<PrepFn, CleanFn> ShellTest<PrepFn, CleanFn> {
+    pub fn new_with_cleanup(test: PathBuf, prep: PrepFn, clean: CleanFn) -> Self {
+        Self { prep, test, clean }
+    }
+}
+
+impl<PrepFn, CleanFn> Test for ShellTest<PrepFn, CleanFn> {
     fn test_interesting(&self, _root: &Path) -> anyhow::Result<bool> {
         todo!()
     }

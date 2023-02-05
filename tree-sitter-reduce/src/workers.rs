@@ -4,7 +4,7 @@ use tempfile::TempDir;
 
 use crate::{
     job::{Job, JobResult, JobStatus},
-    util::copy_to_tempdir,
+    util::{clone_tempdir, WORKDIR},
     Test,
 };
 
@@ -23,7 +23,7 @@ struct WorkerThread<T> {
 impl Worker {
     pub(crate) fn new(root: &Path, test: Arc<impl Test>) -> anyhow::Result<Self> {
         // First, copy the target into a directory
-        let dir = copy_to_tempdir(root)?;
+        let dir = clone_tempdir(root)?;
 
         // Then, prepare the communications channels
         let (sender, worker_receiver) = crossbeam_channel::bounded(1);
@@ -72,14 +72,17 @@ impl<T: Test> WorkerThread<T> {
     }
 
     fn run_job(&self, job: Job) -> JobResult {
-        match job.pass.prepare(self.dir.path()) {
+        let workdir = self.dir.path().join(WORKDIR);
+        let filepath = workdir.join(&job.path);
+
+        match job.pass.prepare(&workdir) {
             Ok(()) => (),
             Err(e) => return JobResult { job, res: Err(e) },
         };
 
         match job
             .pass
-            .reduce(&job.path, job.seed, job.recent_success_rate)
+            .reduce(&filepath, job.seed, job.recent_success_rate)
         {
             Ok(true) => (),
             Ok(false) => {
@@ -91,13 +94,13 @@ impl<T: Test> WorkerThread<T> {
             Err(e) => return JobResult { job, res: Err(e) },
         };
 
-        let res = match self.test.test_interesting(self.dir.path()) {
+        let res = match self.test.test_interesting(&workdir) {
             Ok(true) => JobStatus::Reduced,
             Ok(false) => JobStatus::DidNotReduce,
             Err(e) => return JobResult { job, res: Err(e) },
         };
 
-        match job.pass.cleanup(self.dir.path(), res) {
+        match job.pass.cleanup(&workdir, res) {
             Ok(()) => (),
             Err(e) => return JobResult { job, res: Err(e) },
         };

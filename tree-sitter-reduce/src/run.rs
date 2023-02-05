@@ -111,6 +111,16 @@ impl Worker {
             sender,
         })
     }
+
+    fn submit(&self, j: Job) {
+        self.sender
+            .try_send(j)
+            .expect("Tried to send a job while the previous job was not done yet")
+    }
+
+    fn get_receiver(&self) -> &crossbeam_channel::Receiver<anyhow::Result<bool>> {
+        &self.receiver
+    }
 }
 
 impl WorkerThread {

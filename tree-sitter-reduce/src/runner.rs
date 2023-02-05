@@ -107,26 +107,33 @@ impl<'a, T: Test> Runner<'a, T> {
 
     pub(crate) fn run(mut self) -> anyhow::Result<()> {
         let mut next_snap = std::time::Instant::now() + self.snap_interval;
+        let mut did_reduce = false;
         loop {
             let next_job = self.make_job();
-            match self.wait_for_worker(next_snap)? {
-                Some(w) => w.submit(next_job),
-                None => (),
+            let worker = match did_reduce {
+                true => self.wait_for_worker(Some(next_snap))?,
+                false => self.wait_for_worker(None)?,
+            };
+            if let Some(worker) = worker {
+                did_reduce = true;
+                worker.submit(next_job);
             }
-            if next_snap
-                .checked_duration_since(std::time::Instant::now())
-                .is_some()
+            if did_reduce
+                && next_snap
+                    .checked_duration_since(std::time::Instant::now())
+                    .is_some()
             {
                 // We have passed next snap time!
                 self.snapshot()?;
                 next_snap += self.snap_interval;
+                did_reduce = false;
             }
         }
     }
 
     fn wait_for_worker(
         &mut self,
-        deadline: std::time::Instant,
+        deadline: Option<std::time::Instant>,
     ) -> anyhow::Result<Option<&mut Worker>> {
         loop {
             // Find the first worker with a message
@@ -134,9 +141,12 @@ impl<'a, T: Test> Runner<'a, T> {
             for w in &self.workers {
                 sel.recv(w.get_receiver());
             }
-            let oper = match sel.select_deadline(deadline) {
-                Ok(oper) => oper,
-                Err(crossbeam_channel::SelectTimeoutError) => return Ok(None),
+            let oper = match deadline {
+                None => sel.select(),
+                Some(deadline) => match sel.select_deadline(deadline) {
+                    Ok(oper) => oper,
+                    Err(crossbeam_channel::SelectTimeoutError) => return Ok(None),
+                },
             };
 
             // Read its message and act upon it

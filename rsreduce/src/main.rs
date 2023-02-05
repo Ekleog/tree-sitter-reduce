@@ -31,7 +31,8 @@ fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
     // of passes per file type.
     let mut res = Vec::new();
     for file in walkdir::WalkDir::new(root) {
-        let file = file.with_context(|| format!("walking directory {root:?} looking for rust files"))?;
+        let file =
+            file.with_context(|| format!("walking directory {root:?} looking for rust files"))?;
         if file.file_type().is_file() && file.file_name().to_string_lossy().ends_with(".rs") {
             println!("Found file to reduce: {:?}", file.path()); // TODO: make optional based on verbosity
             res.push(file.path().to_path_buf());

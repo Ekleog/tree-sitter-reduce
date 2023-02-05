@@ -93,12 +93,11 @@ impl<'a, T: Test> Runner<'a, T> {
             .skip(self.rng.gen_range(0..self.files.len()))
             .next()
             .unwrap();
-        let path = self.root.path().join(relpath);
         let pass = self.passes.choose(&mut self.rng).unwrap().clone();
         let seed = self.rng.gen();
         let recent_success_rate = info.recent_success_rate;
         Job {
-            path,
+            path: relpath.clone(),
             pass,
             seed,
             recent_success_rate,

@@ -1,4 +1,7 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use tempfile::TempDir;
 
@@ -9,12 +12,13 @@ use crate::{
 };
 
 pub(crate) struct Worker {
+    dir: TempDir,
     sender: crossbeam_channel::Sender<Job>,
     receiver: crossbeam_channel::Receiver<JobResult>,
 }
 
 struct WorkerThread<T> {
-    dir: TempDir,
+    dir: PathBuf,
     test: Arc<T>,
     receiver: crossbeam_channel::Receiver<Job>,
     sender: crossbeam_channel::Sender<JobResult>,
@@ -31,10 +35,15 @@ impl Worker {
 
         // Finally, spawn a thread!
         std::thread::spawn({
+            let dir = dir.path().to_path_buf();
             let test = test.clone();
             move || WorkerThread::new(dir, test, worker_receiver, worker_sender).run()
         });
-        Ok(Worker { receiver, sender })
+        Ok(Worker {
+            dir,
+            receiver,
+            sender,
+        })
     }
 
     pub(crate) fn submit(&self, j: Job) {
@@ -48,13 +57,13 @@ impl Worker {
     }
 
     pub(crate) fn dir(&self) -> &Path {
-        todo!() // TODO: dir must stay alive until the death of Worker and not WorkerThread!
+        self.dir.path()
     }
 }
 
 impl<T: Test> WorkerThread<T> {
     fn new(
-        dir: TempDir,
+        dir: PathBuf,
         test: Arc<T>,
         receiver: crossbeam_channel::Receiver<Job>,
         sender: crossbeam_channel::Sender<JobResult>,
@@ -76,7 +85,7 @@ impl<T: Test> WorkerThread<T> {
     }
 
     fn run_job(&self, job: Job) -> JobResult {
-        let workdir = self.dir.path().join(WORKDIR);
+        let workdir = self.dir.join(WORKDIR);
         let filepath = workdir.join(&job.path);
 
         match job.pass.prepare(&workdir) {

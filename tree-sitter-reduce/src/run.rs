@@ -58,7 +58,7 @@ pub fn run(
     mut opt: Opt,
     filelist: impl Fn(&Path) -> anyhow::Result<Vec<PathBuf>>,
     test: impl Test,
-    _passes: &[Arc<dyn Pass>],
+    passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
     // Handle the arguments
     let root = opt.canonicalized_root_path()?;
@@ -67,22 +67,24 @@ pub fn run(
     println!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
     let rng = StdRng::seed_from_u64(seed);
 
-    Runner::new(root, test, files, rng, opt.jobs)?.run()
+    Runner::new(root, test, files, passes, rng, opt.jobs)?.run()
 }
 
-struct Runner<T> {
+struct Runner<'a, T> {
     root: PathBuf,
     test: Arc<T>,
     files: Vec<PathBuf>,
+    passes: &'a [Arc<dyn Pass>],
     workers: Vec<Worker>,
     rng: StdRng,
 }
 
-impl<T: Test> Runner<T> {
+impl<'a, T: Test> Runner<'a, T> {
     fn new(
         root: PathBuf,
         test: T,
         files: Vec<PathBuf>,
+        passes: &'a [Arc<dyn Pass>],
         rng: StdRng,
         jobs: usize,
     ) -> anyhow::Result<Self> {
@@ -92,6 +94,7 @@ impl<T: Test> Runner<T> {
             root,
             test,
             files,
+            passes,
             workers: Vec::with_capacity(jobs),
             rng,
         };

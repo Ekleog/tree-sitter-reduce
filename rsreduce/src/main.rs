@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use structopt::StructOpt;
 use tree_sitter_reduce::ShellTest;
@@ -22,5 +22,9 @@ fn main() -> anyhow::Result<()> {
     // Rust testing needs no generic prep/cleanup
     let test = ShellTest::new(opt.test);
     // TODO: remove unwrap below
-    tree_sitter_reduce::run(opt.other_opts, test, &[])
+    tree_sitter_reduce::run(opt.other_opts, list_files, test, &[])
+}
+
+fn list_files(_p: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    todo!()
 }

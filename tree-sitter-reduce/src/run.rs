@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{Pass, Test};
 
@@ -23,6 +23,36 @@ pub struct Opt {
     jobs: usize,
 }
 
-pub fn run(_opt: Opt, _test: impl Test, _passes: &[&dyn Pass]) -> anyhow::Result<()> {
-    todo!()
+impl Opt {
+    pub fn files(
+        &self,
+        default_list: impl Fn(&Path) -> anyhow::Result<Vec<PathBuf>>,
+    ) -> anyhow::Result<Vec<PathBuf>> {
+        match &self.only_files {
+            Some(r) => Ok(r.clone()),
+            None => default_list(&self.root_path),
+        }
+    }
+}
+
+pub fn run(
+    opt: Opt,
+    filelist: impl Fn(&Path) -> anyhow::Result<Vec<PathBuf>>,
+    _test: impl Test,
+    _passes: &[&dyn Pass],
+) -> anyhow::Result<()> {
+    let _files = opt.files(filelist)?;
+    let mut workers = Vec::new();
+    for _ in 0..opt.jobs {
+        workers.push(Worker::new());
+    }
+    Ok(())
+}
+
+struct Worker {}
+
+impl Worker {
+    fn new() -> Self {
+        todo!()
+    }
 }

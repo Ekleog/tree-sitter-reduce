@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "tree-sitter-reduce",
+    "rsreduce",
 ]
 
 [workspace.dependencies]

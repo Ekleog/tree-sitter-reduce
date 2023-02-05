@@ -7,7 +7,7 @@ use tempfile::TempDir;
 
 use crate::{
     job::{Job, JobResult, JobStatus},
-    util::copy_to_tempdir,
+    util::{copy_to_tempdir, WORKDIR},
     workers::Worker,
     Pass, Test,
 };
@@ -123,7 +123,7 @@ impl<'a, T: Test> Runner<'a, T> {
                 .expect("Workers should never disconnect first")
             {
                 JobResult { job, res: Ok(res) } => {
-                    self.handle_result(job, res);
+                    self.handle_result(w, job, res)?;
                     return Ok(&mut self.workers[w]);
                 }
                 JobResult { job, res: Err(e) } => {
@@ -137,11 +137,11 @@ impl<'a, T: Test> Runner<'a, T> {
         }
     }
 
-    fn handle_result(&mut self, job: Job, res: JobStatus) {
+    fn handle_result(&mut self, worker: usize, job: Job, res: JobStatus) -> anyhow::Result<()> {
         match res {
             JobStatus::Reduced => {
                 self.files.get_mut(&job.path).unwrap().record_success();
-                self.handle_reduction(job);
+                self.handle_reduction(worker, job)?;
             }
             JobStatus::DidNotReduce => {
                 self.files.get_mut(&job.path).unwrap().record_fail();
@@ -149,9 +149,24 @@ impl<'a, T: Test> Runner<'a, T> {
             // TODO: do something to avoid trying this pass again on the same file just after?
             JobStatus::PassFailed => (),
         }
+        Ok(())
     }
 
-    fn handle_reduction(&mut self, job: Job) {
-        todo!()
+    fn handle_reduction(&mut self, worker: usize, _job: Job) -> anyhow::Result<()> {
+        // TODO: try to intelligently merge successful reductions? that's what _job would be for
+        let my_dir = self.root.path();
+        let my_workdir = my_dir.join(WORKDIR);
+        let workerdir = self.workers[worker].dir();
+        std::fs::remove_dir_all(&my_workdir)
+            .with_context(|| format!("removing \"current status\" path {my_workdir:?}"))?;
+        fs_extra::dir::copy(
+            workerdir,
+            &my_dir,
+            &fs_extra::dir::CopyOptions::default().content_only(true),
+        )
+        .with_context(|| {
+            format!("copying successful reduction from {workerdir:?} to {my_dir:?}")
+        })?;
+        Ok(())
     }
 }

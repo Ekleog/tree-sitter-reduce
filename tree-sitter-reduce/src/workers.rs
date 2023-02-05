@@ -46,6 +46,10 @@ impl Worker {
     pub(crate) fn get_receiver(&self) -> &crossbeam_channel::Receiver<JobResult> {
         &self.receiver
     }
+
+    pub(crate) fn dir(&self) -> &Path {
+        todo!() // TODO: dir must stay alive until the death of Worker and not WorkerThread!
+    }
 }
 
 impl<T: Test> WorkerThread<T> {

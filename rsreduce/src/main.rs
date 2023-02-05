@@ -1,8 +1,11 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::Context;
 use structopt::StructOpt;
-use tree_sitter_reduce::ShellTest;
+use tree_sitter_reduce::{passes::RemoveLines, ShellTest};
 
 #[derive(Debug, structopt::StructOpt)]
 struct Opt {
@@ -22,7 +25,8 @@ fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
     // Rust testing needs no generic prep/cleanup
     let test = ShellTest::new(opt.test);
-    tree_sitter_reduce::run(opt.other_opts, list_files, test, &[]) // TODO: add passes
+    tree_sitter_reduce::run(opt.other_opts, list_files, test, &[Arc::new(RemoveLines)])
+    // TODO: add more interesting passes
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

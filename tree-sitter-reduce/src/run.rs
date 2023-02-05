@@ -77,14 +77,12 @@ struct Job {
 }
 
 struct Worker {
-    #[allow(dead_code)] // `dir` needs to be kept alive for the temporary directory to stay there
-    dir: TempDir,
     sender: crossbeam_channel::Sender<Job>,
     receiver: crossbeam_channel::Receiver<anyhow::Result<bool>>,
 }
 
 struct WorkerThread<T> {
-    dir: PathBuf,
+    dir: TempDir,
     test: Arc<T>,
     receiver: crossbeam_channel::Receiver<Job>,
     sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
@@ -110,15 +108,10 @@ impl Worker {
 
         // Finally, spawn a thread!
         std::thread::spawn({
-            let dir = dir.path().to_path_buf();
             let test = test.clone();
             move || WorkerThread::new(dir, test, worker_receiver, worker_sender).run()
         });
-        Ok(Worker {
-            dir,
-            receiver,
-            sender,
-        })
+        Ok(Worker { receiver, sender })
     }
 
     fn submit(&self, j: Job) {
@@ -134,7 +127,7 @@ impl Worker {
 
 impl<T: Test> WorkerThread<T> {
     fn new(
-        dir: PathBuf,
+        dir: TempDir,
         test: Arc<T>,
         receiver: crossbeam_channel::Receiver<Job>,
         sender: crossbeam_channel::Sender<anyhow::Result<bool>>,
@@ -156,11 +149,11 @@ impl<T: Test> WorkerThread<T> {
     }
 
     fn run_job(&self, job: Job) -> anyhow::Result<bool> {
-        job.pass.prepare(&self.dir)?;
+        job.pass.prepare(self.dir.path())?;
         job.pass
             .reduce(&job.path, job.seed, job.recent_success_rate)?;
-        let res = self.test.test_interesting(&self.dir)?;
-        job.pass.cleanup(&self.dir, res)?;
+        let res = self.test.test_interesting(self.dir.path())?;
+        job.pass.cleanup(self.dir.path(), res)?;
         Ok(res)
     }
 }

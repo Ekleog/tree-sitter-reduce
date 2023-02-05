@@ -14,8 +14,8 @@ pub struct Opt {
     /// Path to the root of the crate (or workspace)
     ///
     /// The interestingness test will be run in a copy this folder. Note that copies
-    /// can happen during the whole runtime of this program, so the folder should not
-    /// be changed during that time.
+    /// will happen only during the startup of this program. So the folder can be
+    /// changed after the program confirms it's running.
     root_path: PathBuf,
 
     /// If this option is passed, then only the file passed to it will be reduced
@@ -82,7 +82,7 @@ pub fn run(
 }
 
 struct Runner<'a, T> {
-    root: PathBuf,
+    root: TempDir,
     test: Arc<T>,
     files: Vec<PathBuf>,
     passes: &'a [Arc<dyn Pass>],
@@ -99,16 +99,16 @@ impl<'a, T: Test> Runner<'a, T> {
         rng: StdRng,
         jobs: usize,
     ) -> anyhow::Result<Self> {
-        let test = Arc::new(test);
-
         let mut this = Runner {
-            root,
-            test,
+            root: copy_to_tempdir(&root)?,
+            test: Arc::new(test),
             files,
             passes,
             workers: Vec::with_capacity(jobs),
             rng,
         };
+
+        println!("Finished copying target directory, running…");
 
         // Spawn the workers
         for _ in 0..jobs {
@@ -119,14 +119,18 @@ impl<'a, T: Test> Runner<'a, T> {
     }
 
     fn spawn_worker(&mut self) -> anyhow::Result<()> {
-        let worker = Worker::new(&self.root, self.test.clone()).context("spinning up a worker")?;
+        let worker =
+            Worker::new(self.root.path(), self.test.clone()).context("spinning up a worker")?;
         worker.submit(self.make_job());
         self.workers.push(worker);
         Ok(())
     }
 
     fn make_job(&mut self) -> Job {
-        let path = self.root.join(self.files.choose(&mut self.rng).unwrap());
+        let path = self
+            .root
+            .path()
+            .join(self.files.choose(&mut self.rng).unwrap());
         let pass = self.passes.choose(&mut self.rng).unwrap().clone();
         let seed = self.rng.gen();
         let recent_success_rate = 0; // TODO
@@ -165,16 +169,7 @@ struct WorkerThread<T> {
 impl Worker {
     fn new(root: &Path, test: Arc<impl Test>) -> anyhow::Result<Self> {
         // First, copy the target into a directory
-        let dir = tempfile::Builder::new()
-            .prefix("tree-sitter-reduce-")
-            .tempdir()
-            .context("creating temporary directory")?;
-        fs_extra::dir::copy(
-            root,
-            &dir,
-            &fs_extra::dir::CopyOptions::default().content_only(true),
-        )
-        .with_context(|| format!("copying source from {root:?} to {:?}", dir.path()))?;
+        let dir = copy_to_tempdir(root)?;
 
         // Then, prepare the communications channels
         let (sender, worker_receiver) = crossbeam_channel::bounded(1);
@@ -230,4 +225,18 @@ impl<T: Test> WorkerThread<T> {
         job.pass.cleanup(self.dir.path(), res)?;
         Ok(res)
     }
+}
+
+fn copy_to_tempdir(root: &Path) -> anyhow::Result<TempDir> {
+    let dir = tempfile::Builder::new()
+        .prefix("tree-sitter-reduce-")
+        .tempdir()
+        .context("creating temporary directory")?;
+    fs_extra::dir::copy(
+        root,
+        &dir,
+        &fs_extra::dir::CopyOptions::default().content_only(true),
+    )
+    .with_context(|| format!("copying source from {root:?} to {:?}", dir.path()))?;
+    Ok(dir)
 }

@@ -143,8 +143,9 @@ impl<'a, T: Test> Runner<'a, T> {
 
     fn run(mut self) -> anyhow::Result<()> {
         loop {
-            let w = self.wait_for_worker()?;
-            todo!()
+            let next_job = self.make_job();
+            self.wait_for_worker()?.submit(next_job);
+            todo!() // Do regular snapshotting of current status
         }
     }
 

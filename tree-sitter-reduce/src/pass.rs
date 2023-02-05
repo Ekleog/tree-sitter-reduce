@@ -17,7 +17,17 @@ pub trait Pass: Send + Sync {
     ///
     /// Note that for proper operation this MUST BE DETERMINISTIC! For this reason, a
     /// `random_seed` argument is provided, which the pass can use to initialize an RNG.
-    fn reduce(&self, path: &Path, random_seed: u64) -> anyhow::Result<()>;
+    ///
+    /// The `recent_success_rate` parameter is passed so that the passes can define how
+    /// aggressive they want to be. Basically, the number will get closer to `u8::MAX`
+    /// if recent passes have led to successful reductions, and closer to `0` if recent
+    /// passes have failed to reduce the file size.
+    fn reduce(
+        &self,
+        path: &Path,
+        random_seed: u64,
+        recent_success_rate: u8,
+    ) -> anyhow::Result<()>;
 
     /// Cleanup the root path after this pass' test ran
     ///

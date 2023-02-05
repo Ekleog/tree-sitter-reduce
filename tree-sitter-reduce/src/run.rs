@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
-use rand::SeedableRng;
+use rand::{rngs::StdRng, SeedableRng};
 use tempfile::TempDir;
 
 use crate::{Pass, Test};
@@ -37,11 +37,10 @@ pub struct Opt {
 }
 
 impl Opt {
-    pub fn canonicalize_root_path(&mut self) -> anyhow::Result<()> {
-        Ok(self.root_path = self
-            .root_path
+    pub fn canonicalized_root_path(&mut self) -> anyhow::Result<PathBuf> {
+        self.root_path
             .canonicalize()
-            .with_context(|| "canonicalizing root path {root:?}")?)
+            .with_context(|| "canonicalizing root path {root:?}")
     }
 
     pub fn files(
@@ -62,20 +61,51 @@ pub fn run(
     _passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
     // Handle the arguments
-    opt.canonicalize_root_path()?;
-    let _files = opt.files(filelist)?;
-    let test = Arc::new(test);
+    let root = opt.canonicalized_root_path()?;
+    let files = opt.files(filelist)?;
     let seed = opt.random_seed.unwrap_or_else(rand::random);
     println!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
-    let rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let rng = StdRng::seed_from_u64(seed);
 
-    // Spawn the workers
-    let mut workers = Vec::new();
-    for _ in 0..opt.jobs {
-        workers.push(Worker::new(&opt.root_path, test.clone()).context("spinning up worker")?);
-    }
+    Runner::new(root, test, files, rng, opt.jobs)?;
 
     todo!()
+}
+
+struct Runner<T> {
+    root: PathBuf,
+    test: Arc<T>,
+    files: Vec<PathBuf>,
+    workers: Vec<Worker>,
+    rng: StdRng,
+}
+
+impl<T: Test> Runner<T> {
+    fn new(
+        root: PathBuf,
+        test: T,
+        files: Vec<PathBuf>,
+        rng: StdRng,
+        jobs: usize,
+    ) -> anyhow::Result<Self> {
+        let test = Arc::new(test);
+
+        // Spawn the workers
+        let mut workers = Vec::new();
+        for _ in 0..jobs {
+            let worker = Worker::new(&root, test.clone()).context("spinning up a worker")?;
+            worker.submit(todo!());
+            workers.push(worker);
+        }
+
+        Ok(Runner {
+            root,
+            test,
+            files,
+            workers,
+            rng,
+        })
+    }
 }
 
 struct Job {

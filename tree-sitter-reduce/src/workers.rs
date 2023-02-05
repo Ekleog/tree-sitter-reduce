@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::Context;
 use tempfile::TempDir;
 
 use crate::{
@@ -90,7 +91,12 @@ impl<T: Test> WorkerThread<T> {
 
         match job.pass.prepare(&workdir) {
             Ok(()) => (),
-            Err(e) => return JobResult { job, res: Err(e) },
+            Err(e) => {
+                return JobResult {
+                    res: Err(e).with_context(|| format!("preparing for pass {job:?}")),
+                    job,
+                }
+            }
         };
 
         match job
@@ -104,18 +110,33 @@ impl<T: Test> WorkerThread<T> {
                     res: Ok(JobStatus::PassFailed),
                 }
             }
-            Err(e) => return JobResult { job, res: Err(e) },
+            Err(e) => {
+                return JobResult {
+                    res: Err(e).with_context(|| format!("reducing with pass {job:?}")),
+                    job,
+                }
+            }
         };
 
         let res = match self.test.test_interesting(&workdir) {
             Ok(true) => JobStatus::Reduced,
             Ok(false) => JobStatus::DidNotReduce,
-            Err(e) => return JobResult { job, res: Err(e) },
+            Err(e) => {
+                return JobResult {
+                    res: Err(e).with_context(|| format!("running after pass {job:?}")),
+                    job,
+                }
+            }
         };
 
         match job.pass.cleanup(&workdir, res) {
             Ok(()) => (),
-            Err(e) => return JobResult { job, res: Err(e) },
+            Err(e) => {
+                return JobResult {
+                    res: Err(e).with_context(|| format!("cleaning up after pass {job:?}")),
+                    job,
+                }
+            }
         };
 
         JobResult { job, res: Ok(res) }

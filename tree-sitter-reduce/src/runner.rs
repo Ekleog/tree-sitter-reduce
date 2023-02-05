@@ -161,7 +161,7 @@ impl<'a, T: Test> Runner<'a, T> {
                 }
                 JobResult { job, res: Err(e) } => {
                     eprintln!(
-                        "Worker died while processing a job! Starting a new worker…\nJob: {job:#?}\nError:\n---\n{e:#}\n---"
+                        "Worker died while processing a job! Starting a new worker…\nJob: {job:#?}\nError:\n---\n{e:?}\n---"
                     );
                     self.workers.swap_remove(w);
                     self.spawn_worker()?;

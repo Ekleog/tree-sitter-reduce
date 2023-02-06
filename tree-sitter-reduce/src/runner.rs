@@ -221,6 +221,8 @@ impl<'a, T: Test> Runner<'a, T> {
         std::fs::create_dir(&snap_dir)
             .with_context(|| format!("creating snapshot directory {snap_dir:?}"))?;
         copy_dir_contents(&workdir, &snap_dir)?;
+        self.test.cleanup_snapshot(&snap_dir)
+            .with_context(|| format!("cleaning up snapshot {snap_dir:?}"))?;
         tracing::info!("Wrote a reduced snapshot in {snap_dir:?}");
         Ok(())
     }

@@ -45,7 +45,10 @@ pub struct Opt {
     ///
     /// By default, snapshots will be taken every 10 seconds, which should be fine
     /// for most use cases. But if you have little disk space, or try to minimize a
-    /// huge directory that gets reduced a lot, it could make sense to increase it.
+    /// huge directory (eg. Rust with a `target/` directory if it is not removed on
+    /// snapshot), it could make sense to increase it.
+    // TODO: allow customization (and disabling) of cleanup command for rsreduce
+    // TODO: add a max_snapshots parameter to limit the number of kept snapshots for very long runs
     #[structopt(long, default_value = "10")]
     snapshot_interval: u64,
 

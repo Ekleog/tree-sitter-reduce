@@ -28,7 +28,7 @@ fn main() -> anyhow::Result<()> {
         .canonicalize()
         .with_context(|| format!("canonicalizing path {:?}", opt.test))?;
     // Rust testing needs no generic prep/cleanup
-    let test = ShellTest::new(test);
+    let test = ShellTest::new_with_cleanup(test, noop, noop, remove_target_dir);
     tree_sitter_reduce::run(
         opt.other_opts,
         list_files,
@@ -52,4 +52,16 @@ fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
         }
     }
     Ok(res)
+}
+
+fn noop(_: &Path) -> anyhow::Result<()> {
+    Ok(())
+}
+
+fn remove_target_dir(root: &Path) -> anyhow::Result<()> {
+    let target_dir = root.join("target");
+    if let Ok(_) = std::fs::metadata(target_dir) {
+        std::fs::remove_dir_all(&root.join("target"))?;
+    }
+    Ok(())
 }

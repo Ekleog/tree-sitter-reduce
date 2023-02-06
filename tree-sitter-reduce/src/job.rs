@@ -46,10 +46,13 @@ impl Job {
         let hash = hasher.finish();
         let full_path = workdir.join(&self.path);
         Ok(format!(
-            "{}@{:?}#{:x}",
+            "{}@{:?}#{:04x}",
             self.pass
                 .explain(&full_path, self.seed, self.recent_success_rate)
-                .with_context(|| format!("explaining pass for job {:?} in workdir {workdir:?}", self))?,
+                .with_context(|| format!(
+                    "explaining pass for job {:?} in workdir {workdir:?}",
+                    self
+                ))?,
             &self.path,
             hash % 0xFFFF,
         ))

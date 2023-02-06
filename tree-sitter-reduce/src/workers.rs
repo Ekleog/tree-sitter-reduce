@@ -110,6 +110,11 @@ impl<T: Test> WorkerThread<T> {
         let filepath = workdir.join(&job.path);
         let tmpfilepath = tmpdir.join(&job.path);
 
+        if let Some(parent) = tmpfilepath.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("recursively creating directory {parent:?} before pass {job:?}")
+            })?;
+        }
         std::fs::copy(&filepath, &tmpfilepath)
             .with_context(|| format!("saving file {tmpfilepath:?} before pass {job:?}"))?;
 
@@ -143,6 +148,9 @@ impl<T: Test> WorkerThread<T> {
                 format!("restoring file {tmpfilepath:?} after failed pass {job:?}")
             })?;
         }
+        std::fs::remove_file(&tmpfilepath).with_context(|| {
+            format!("removing temporary file {tmpfilepath:?} after pass {job:?}")
+        })?;
 
         Ok(res)
     }

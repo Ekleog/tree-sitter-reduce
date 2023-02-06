@@ -4,7 +4,7 @@ use anyhow::Context;
 use tempfile::TempDir;
 
 pub(crate) const WORKDIR: &str = "workdir";
-pub(crate) const TMPDIR: &str = "workdir";
+pub(crate) const TMPDIR: &str = "tmpdir";
 
 pub(crate) fn copy_dir_contents(from: &Path, to: &Path) -> anyhow::Result<()> {
     fs_extra::dir::copy(
@@ -32,7 +32,9 @@ pub(crate) fn copy_to_tempdir(root: &Path) -> anyhow::Result<TempDir> {
         .context("creating temporary directory")?;
     let actual_path = dir.path().join(WORKDIR);
     std::fs::create_dir(&actual_path)
-        .context("creating directory nested under the temporary directory")?;
+        .context("creating workdir nested under the temporary directory")?;
     copy_dir_contents(root, &actual_path)?;
+    std::fs::create_dir(&dir.path().join(TMPDIR))
+        .context("creating tempdir nested under the temporary directory")?;
     Ok(dir)
 }

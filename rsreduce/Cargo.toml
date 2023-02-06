@@ -6,5 +6,6 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 structopt.workspace = true
+tracing.workspace = true
 tree-sitter-reduce.workspace = true
 walkdir.workspace = true

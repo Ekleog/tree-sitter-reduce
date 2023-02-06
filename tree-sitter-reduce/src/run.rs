@@ -82,6 +82,10 @@ pub fn run(
     test: impl Test,
     passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
+    // Setup tracing
+    let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
+    tracing::subscriber::set_global_default(subscriber).context("setting up logger")?;
+
     // Handle the arguments
     let root = opt.canonicalized_root_path()?;
     let files = opt.files(filelist)?;
@@ -107,12 +111,12 @@ pub fn run(
             .with_context(|| format!("removing test directory {testdir:?}"))?;
     }
     if opt.snapshot_interval > 300 {
-        eprintln!("WARNING: You set snapshot interval to more than 5 minutes.");
-        eprintln!("WARNING: This usually slows down the time to receive the results, without getting anything in return");
+        tracing::warn!("You set snapshot interval to more than 5 minutes.");
+        tracing::warn!("This usually slows down the time to receive the results, without getting anything in return");
     }
 
     // Actually run
-    println!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
+    tracing::info!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");
     let rng = StdRng::seed_from_u64(seed);
     Runner::new(
         root,

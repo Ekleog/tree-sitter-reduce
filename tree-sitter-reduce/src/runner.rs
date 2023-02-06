@@ -70,7 +70,7 @@ impl<'a, T: Test> Runner<'a, T> {
             rng,
         };
 
-        println!("Finished copying target directory, starting the reducing…");
+        tracing::info!("Finished copying target directory, starting the reducing…");
         for _ in 0..jobs {
             this.spawn_worker()?;
         }
@@ -152,12 +152,12 @@ impl<'a, T: Test> Runner<'a, T> {
             {
                 JobResult { job, res: Ok(res) } => {
                     // TODO: turn into one indicatif progress bar per worker
-                    println!("Worker finished running with result {res:?} for job {job:?}");
+                    tracing::info!("Worker finished running with result {res:?} for job {job:?}");
                     self.handle_result(w, job, res)?;
                     return Ok(Some(&mut self.workers[w]));
                 }
                 JobResult { job, res: Err(e) } => {
-                    eprintln!(
+                    tracing::error!(
                         "Worker died while processing a job! Starting a new worker…\nJob: {job:#?}\nError:\n---\n{e:?}\n---"
                     );
                     self.workers.swap_remove(w);
@@ -208,7 +208,7 @@ impl<'a, T: Test> Runner<'a, T> {
         std::fs::create_dir(&snap_dir)
             .with_context(|| format!("creating snapshot directory {snap_dir:?}"))?;
         copy_dir_contents(&workdir, &snap_dir)?;
-        println!("Wrote a reduced snapshot in {snap_dir:?}");
+        tracing::info!("Wrote a reduced snapshot in {snap_dir:?}");
         Ok(())
     }
 }

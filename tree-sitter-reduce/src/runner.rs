@@ -118,8 +118,8 @@ impl<'a, T: Test> Runner<'a, T> {
                 true => self.wait_for_worker(Some(next_snap))?,
                 false => self.wait_for_worker(None)?,
             };
-            if let Some(worker) = worker {
-                did_reduce = true;
+            if let Some((worker, pass_status)) = worker {
+                did_reduce |= pass_status == JobStatus::Reduced;
                 worker.submit(next_job);
             }
             if did_reduce && std::time::Instant::now() >= next_snap {
@@ -134,7 +134,7 @@ impl<'a, T: Test> Runner<'a, T> {
     fn wait_for_worker(
         &mut self,
         deadline: Option<std::time::Instant>,
-    ) -> anyhow::Result<Option<&mut Worker>> {
+    ) -> anyhow::Result<Option<(&mut Worker, JobStatus)>> {
         loop {
             // Find the first worker with a message
             let mut sel = crossbeam_channel::Select::new();
@@ -159,7 +159,7 @@ impl<'a, T: Test> Runner<'a, T> {
                     // TODO: turn into one indicatif progress bar per worker
                     tracing::info!("Worker finished running with result {res:?} for job {job:?}");
                     self.handle_result(w, job, res)?;
-                    return Ok(Some(&mut self.workers[w]));
+                    return Ok(Some((&mut self.workers[w], res)));
                 }
                 JobResult { job, res: Err(e) } => {
                     tracing::error!(

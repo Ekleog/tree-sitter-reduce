@@ -5,6 +5,8 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::Context;
+
 use crate::Pass;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,7 +47,8 @@ impl Job {
         Ok(format!(
             "{}@{:?}#{:x}",
             self.pass
-                .explain(&full_path, self.seed, self.recent_success_rate)?,
+                .explain(&full_path, self.seed, self.recent_success_rate)
+                .with_context(|| format!("explaining pass for job {:?} in workdir {workdir:?}", self))?,
             &self.path,
             hash % 0xFFFF,
         ))

@@ -371,9 +371,9 @@ dependencies = [
 
 [[package]]
 name = "kine-icu"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c38408e7c0d377b942321dc26ff11bfba578301421b74db07af192521223b15"
+checksum = "f014d3101dd707628f52e7682c1a095774f4d93c7893d9f7c2db72165e9082b3"
 dependencies = [
  "bolero",
  "icu_calendar",

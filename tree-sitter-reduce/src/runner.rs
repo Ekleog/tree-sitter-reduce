@@ -214,14 +214,24 @@ impl<'a, T: Test> Runner<'a, T> {
     }
 
     fn snapshot(&self) -> anyhow::Result<()> {
-        let snap_dir = self
-            .snap_dir
-            .join(format!("{:?}", Cal::new(Iso, Utc).now()));
+        let now = Cal::new(Iso, Utc).now();
+        let now = now.icu();
+        let snap_dir = self.snap_dir.join(format!(
+            "{:04}-{:02}-{:02}-{:02}-{:02}-{:02}-{:03}",
+            now.date.year().number,
+            now.date.month().ordinal,
+            now.date.day_of_month().0,
+            now.time.hour.number(),
+            now.time.minute.number(),
+            now.time.second.number(),
+            now.time.nanosecond.number() / 1_000_000
+        ));
         let workdir = self.root.path().join(WORKDIR);
         std::fs::create_dir(&snap_dir)
             .with_context(|| format!("creating snapshot directory {snap_dir:?}"))?;
         copy_dir_contents(&workdir, &snap_dir)?;
-        self.test.cleanup_snapshot(&snap_dir)
+        self.test
+            .cleanup_snapshot(&snap_dir)
             .with_context(|| format!("cleaning up snapshot {snap_dir:?}"))?;
         tracing::info!("Wrote a reduced snapshot in {snap_dir:?}");
         Ok(())

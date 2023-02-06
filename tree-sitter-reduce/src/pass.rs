@@ -1,8 +1,8 @@
-use std::{fmt::Debug, path::Path};
+use std::{collections::hash_map::DefaultHasher, fmt::Debug, hash::Hash, path::Path};
 
 use crate::job::JobStatus;
 
-pub trait Pass: Debug + Send + Sync {
+pub trait Pass: Debug + DynHash + Send + Sync {
     /// Prepare the root path for this pass
     ///
     /// This will be called with as argument the `root` passed to `run`. It should
@@ -45,5 +45,24 @@ pub trait Pass: Debug + Send + Sync {
     fn cleanup(&self, root: &Path, was_interesting: JobStatus) -> anyhow::Result<()> {
         let _ = (root, was_interesting);
         Ok(())
+    }
+
+    /// Display a human-readable version explaining what this pass actually did to
+    /// the file
+    fn explain(
+        &self,
+        path: &Path,
+        random_seed: u64,
+        recent_success_rate: u8,
+    ) -> anyhow::Result<String>;
+}
+
+pub trait DynHash {
+    fn dyn_hash(&self, hasher: &mut DefaultHasher);
+}
+
+impl<T: Hash> DynHash for T {
+    fn dyn_hash(&self, hasher: &mut DefaultHasher) {
+        self.hash(hasher)
     }
 }

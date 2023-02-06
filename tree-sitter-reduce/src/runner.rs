@@ -157,13 +157,17 @@ impl<'a, T: Test> Runner<'a, T> {
             {
                 JobResult { job, res: Ok(res) } => {
                     // TODO: turn into one indicatif progress bar per worker
-                    tracing::info!("Worker finished running with result {res:?} for job {job:?}");
+                    tracing::info!(
+                        "Worker finished running with result {res:?} for job {}",
+                        job.explain(self.workers[w].dir())?,
+                    );
                     self.handle_result(w, job, res)?;
                     return Ok(Some((&mut self.workers[w], res)));
                 }
                 JobResult { job, res: Err(e) } => {
                     tracing::error!(
-                        "Worker died while processing a job! Starting a new worker…\nJob: {job:#?}\nError:\n---\n{e:?}\n---"
+                        "Worker died while processing a job! Starting a new worker…\nJob: {}\nError:\n---\n{e:?}\n---",
+                        job.explain(self.workers[w].dir())?,
                     );
                     self.workers.swap_remove(w);
                     self.spawn_worker()?;

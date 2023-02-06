@@ -1,4 +1,9 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::Pass;
 
@@ -20,4 +25,29 @@ pub(crate) struct Job {
 pub(crate) struct JobResult {
     pub(crate) job: Job,
     pub(crate) res: anyhow::Result<JobStatus>,
+}
+
+impl Job {
+    fn hash(&self, state: &mut DefaultHasher) {
+        self.path.hash(state);
+        self.pass.dyn_hash(state);
+        self.seed.hash(state);
+        self.recent_success_rate.hash(state);
+    }
+}
+
+impl Job {
+    pub fn explain(&self, workdir: &Path) -> anyhow::Result<String> {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        let hash = hasher.finish();
+        let full_path = workdir.join(&self.path);
+        Ok(format!(
+            "{}@{:?}#{:x}",
+            self.pass
+                .explain(&full_path, self.seed, self.recent_success_rate)?,
+            &self.path,
+            hash % 0xFFFF,
+        ))
+    }
 }

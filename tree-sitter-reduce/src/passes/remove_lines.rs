@@ -27,8 +27,13 @@ impl RemoveLines {
         let wanted_average = (f32::from(recent_success_rate) + 1.) * 20. / 256.;
         let num_dels = 1 + (delete_lots * wanted_average) as usize; // make avg somewhat related to success rate
         let num_lines = file.lines().count();
-        let delete_from = rng.gen_range(0..num_lines);
-        delete_from..(delete_from + std::cmp::min(num_lines, delete_from + num_dels))
+        match num_lines {
+            0 => 0..0,
+            _ => {
+                let delete_from = rng.gen_range(0..num_lines);
+                delete_from..(delete_from + std::cmp::min(num_lines, delete_from + num_dels))
+            }
+        }
     }
 }
 

@@ -86,12 +86,12 @@ impl<'a, T: Test> Runner<'a, T> {
     fn spawn_worker(&mut self) -> anyhow::Result<()> {
         let worker =
             Worker::new(self.root.path(), self.test.clone()).context("spinning up a worker")?;
-        worker.submit(self.make_job());
         self.workers.push(worker);
+        self.send_job_to(self.workers.len() - 1)?;
         Ok(())
     }
 
-    fn make_job(&mut self) -> Job {
+    fn send_job_to(&mut self, worker: usize) -> anyhow::Result<()> {
         let (relpath, info) = self
             .files
             .iter()
@@ -101,26 +101,29 @@ impl<'a, T: Test> Runner<'a, T> {
         let pass = self.passes.choose(&mut self.rng).unwrap().clone();
         let seed = self.rng.gen();
         let recent_success_rate = info.recent_success_rate;
-        Job {
+        let mut res = Job {
             path: relpath.clone(),
             pass,
             seed,
-            recent_success_rate,
-        }
+            recent_success_rate: recent_success_rate,
+            description: String::new(),
+        };
+        res.description = res.explain(&self.workers[worker].workdir())?;
+        self.workers[worker].submit(res);
+        Ok(())
     }
 
     pub(crate) fn run(mut self) -> anyhow::Result<()> {
         let mut next_snap = std::time::Instant::now() + self.snap_interval;
         let mut did_reduce = false;
         loop {
-            let next_job = self.make_job();
             let worker = match did_reduce {
                 true => self.wait_for_worker(Some(next_snap))?,
                 false => self.wait_for_worker(None)?,
             };
             if let Some((worker, pass_status)) = worker {
                 did_reduce |= pass_status == JobStatus::Reduced;
-                worker.submit(next_job);
+                self.send_job_to(worker)?;
             }
             if did_reduce && std::time::Instant::now() >= next_snap {
                 // We have passed next snap time!
@@ -131,10 +134,11 @@ impl<'a, T: Test> Runner<'a, T> {
         }
     }
 
+    /// Returns Some((worker id, job result)) if a worker finished, None otherwise
     fn wait_for_worker(
         &mut self,
         deadline: Option<std::time::Instant>,
-    ) -> anyhow::Result<Option<(&mut Worker, JobStatus)>> {
+    ) -> anyhow::Result<Option<(usize, JobStatus)>> {
         loop {
             // Find the first worker with a message
             let mut sel = crossbeam_channel::Select::new();
@@ -159,15 +163,15 @@ impl<'a, T: Test> Runner<'a, T> {
                     // TODO: turn into one indicatif progress bar per worker
                     tracing::info!(
                         "Worker finished running with result {res:?} for job {}",
-                        job.explain(self.workers[w].dir())?,
+                        job.description,
                     );
                     self.handle_result(w, job, res)?;
-                    return Ok(Some((&mut self.workers[w], res)));
+                    return Ok(Some((w, res)));
                 }
                 JobResult { job, res: Err(e) } => {
                     tracing::error!(
                         "Worker died while processing a job! Starting a new worker…\nJob: {}\nError:\n---\n{e:?}\n---",
-                        job.explain(self.workers[w].dir())?,
+                        job.description,
                     );
                     self.workers.swap_remove(w);
                     self.spawn_worker()?;
@@ -195,7 +199,7 @@ impl<'a, T: Test> Runner<'a, T> {
         // TODO: try to intelligently merge successful reductions? that's what _job would be for
         let my_dir = self.root.path();
         let my_workdir = my_dir.join(WORKDIR);
-        let workerdir = self.workers[worker].dir();
+        let workerdir = self.workers[worker].rootdir();
         std::fs::remove_dir_all(&my_workdir)
             .with_context(|| format!("removing \"current status\" path {my_workdir:?}"))?;
         fs_extra::dir::copy(

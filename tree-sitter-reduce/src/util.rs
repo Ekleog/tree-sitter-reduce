@@ -4,6 +4,7 @@ use anyhow::Context;
 use tempfile::TempDir;
 
 pub(crate) const WORKDIR: &str = "workdir";
+pub(crate) const TMPDIR: &str = "workdir";
 
 pub(crate) fn copy_dir_contents(from: &Path, to: &Path) -> anyhow::Result<()> {
     fs_extra::dir::copy(

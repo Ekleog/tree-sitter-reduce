@@ -16,12 +16,13 @@ pub enum JobStatus {
     PassFailed,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct Job {
     pub(crate) path: PathBuf,
     pub(crate) pass: Arc<dyn Pass>,
     pub(crate) seed: u64,
     pub(crate) recent_success_rate: u8,
+    pub(crate) description: String,
 }
 
 pub(crate) struct JobResult {

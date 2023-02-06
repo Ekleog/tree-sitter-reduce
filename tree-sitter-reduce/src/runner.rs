@@ -117,11 +117,7 @@ impl<'a, T: Test> Runner<'a, T> {
                 did_reduce = true;
                 worker.submit(next_job);
             }
-            if did_reduce
-                && next_snap
-                    .checked_duration_since(std::time::Instant::now())
-                    .is_some()
-            {
+            if did_reduce && std::time::Instant::now() >= next_snap {
                 // We have passed next snap time!
                 self.snapshot()?;
                 next_snap += self.snap_interval;

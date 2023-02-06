@@ -2,6 +2,11 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use fxhash::FxHashMap;
+use kine::{
+    icu::{cal::Iso, Cal},
+    tz::Utc,
+    Calendar,
+};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng};
 use tempfile::TempDir;
 
@@ -203,7 +208,7 @@ impl<'a, T: Test> Runner<'a, T> {
     fn snapshot(&self) -> anyhow::Result<()> {
         let snap_dir = self
             .snap_dir
-            .join(format!("{:?}", std::time::SystemTime::now()));
+            .join(format!("{:?}", Cal::new(Iso, Utc).now()));
         let workdir = self.root.path().join(WORKDIR);
         std::fs::create_dir(&snap_dir)
             .with_context(|| format!("creating snapshot directory {snap_dir:?}"))?;

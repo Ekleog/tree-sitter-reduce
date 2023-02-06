@@ -8,6 +8,7 @@ anyhow.workspace = true
 crossbeam-channel.workspace = true
 fs_extra.workspace = true
 fxhash.workspace = true
+kine.workspace = true
 rand.workspace = true
 rand_distr.workspace = true
 structopt.workspace = true

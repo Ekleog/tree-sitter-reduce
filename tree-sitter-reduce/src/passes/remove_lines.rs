@@ -31,7 +31,7 @@ impl RemoveLines {
             0 => None,
             _ => Some({
                 let delete_from = rng.gen_range(0..num_lines);
-                delete_from..(delete_from + std::cmp::min(num_lines, delete_from + num_dels))
+                delete_from..std::cmp::min(num_lines, delete_from + num_dels)
             }),
         }
     }

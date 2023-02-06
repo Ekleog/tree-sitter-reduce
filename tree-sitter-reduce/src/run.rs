@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::Context;
 use rand::{rngs::StdRng, SeedableRng};
+use tracing_subscriber::layer::SubscriberExt;
 
 use crate::{runner::Runner, Pass, Test};
 
@@ -85,8 +86,16 @@ pub fn run(
     test: impl Test,
     passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
+    // Setup the progress bar
+    let progress = Arc::new(indicatif::MultiProgress::new());
+
     // Setup tracing
-    let subscriber = tracing_subscriber::FmtSubscriber::builder().finish();
+    let logs = tracing_subscriber::fmt::Layer::default()
+        .with_writer(IndicatifWriter::new({
+            let progress = progress.clone();
+            move |buffer: &[u8]| progress.println(String::from_utf8_lossy(buffer))
+        }));
+    let subscriber = tracing_subscriber::Registry::default().with(logs);
     tracing::subscriber::set_global_default(subscriber).context("setting up logger")?;
 
     // Handle the arguments
@@ -132,4 +141,35 @@ pub fn run(
         opt.jobs,
     )?
     .run()
+}
+
+// Used to make tracing work well with indicatif
+#[derive(Clone)]
+struct IndicatifWriter<F>(F);
+
+impl<F> IndicatifWriter<F> {
+    pub fn new(f: F) -> Self {
+        Self(f)
+    }
+}
+
+impl<F: Fn(&[u8]) -> std::io::Result<()>> std::io::Write for IndicatifWriter<F> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        (self.0)(buf)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<F: Clone + Fn(&[u8]) -> std::io::Result<()>> tracing_subscriber::fmt::MakeWriter<'_>
+    for IndicatifWriter<F>
+{
+    type Writer = Self;
+
+    fn make_writer(&self) -> Self::Writer {
+        self.clone()
+    }
 }

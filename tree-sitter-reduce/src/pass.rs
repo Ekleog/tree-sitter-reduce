@@ -29,6 +29,9 @@ pub trait Pass: Debug + DynHash + Send + Sync {
     /// and `false` if the current input cannot be handled by this pass. Returning errors
     /// should be reserved to situations where the pass crashed midways and the whole
     /// directory needs to be reset.
+    /// 
+    /// Note that if the pass returns `false`, it is assumed that it did not touch the
+    /// file, and so its contents does not need to be restored.
     fn reduce(
         &self,
         path: &Path,

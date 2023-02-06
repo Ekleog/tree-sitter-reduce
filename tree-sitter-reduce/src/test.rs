@@ -47,16 +47,27 @@ impl
 }
 
 impl<PrepFn, CleanFn, SnapCleanFn> ShellTest<PrepFn, CleanFn, SnapCleanFn> {
-    pub fn new_with_cleanup(
-        test: PathBuf,
-        prep: PrepFn,
-        clean: CleanFn,
-        snap_clean: SnapCleanFn,
-    ) -> Self {
-        Self {
+    pub fn with_fixture<NewPrep, NewClean>(
+        self,
+        prep: NewPrep,
+        clean: NewClean,
+    ) -> ShellTest<NewPrep, NewClean, SnapCleanFn> {
+        ShellTest {
             prep,
-            test,
+            test: self.test,
             clean,
+            snap_clean: self.snap_clean,
+        }
+    }
+
+    pub fn with_snapshot_cleanup<NewSnap>(
+        self,
+        snap_clean: NewSnap,
+    ) -> ShellTest<PrepFn, CleanFn, NewSnap> {
+        ShellTest {
+            prep: self.prep,
+            test: self.test,
+            clean: self.clean,
             snap_clean,
         }
     }

@@ -2,6 +2,7 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::Context;
 use fxhash::FxHashMap;
+use indicatif::ProgressBar;
 use kine::{
     icu::{cal::Iso, Cal},
     tz::Utc,
@@ -63,6 +64,7 @@ impl<'a, T: Test> Runner<'a, T> {
         snap_interval: Duration,
         rng: StdRng,
         jobs: usize,
+        progress: indicatif::MultiProgress,
     ) -> anyhow::Result<Self> {
         let mut this = Runner {
             root: copy_to_tempdir(&root)?,
@@ -77,15 +79,15 @@ impl<'a, T: Test> Runner<'a, T> {
 
         tracing::info!("Finished copying target directory, starting the reducing…");
         for _ in 0..jobs {
-            this.spawn_worker()?;
+            this.spawn_worker(progress.add(ProgressBar::new_spinner()))?;
         }
 
         Ok(this)
     }
 
-    fn spawn_worker(&mut self) -> anyhow::Result<()> {
-        let worker =
-            Worker::new(self.root.path(), self.test.clone()).context("spinning up a worker")?;
+    fn spawn_worker(&mut self, progress: ProgressBar) -> anyhow::Result<()> {
+        let worker = Worker::new(self.root.path(), self.test.clone(), progress)
+            .context("spinning up a worker")?;
         self.workers.push(worker);
         self.send_job_to(self.workers.len() - 1)?;
         Ok(())
@@ -109,7 +111,7 @@ impl<'a, T: Test> Runner<'a, T> {
             description: String::new(),
         };
         res.description = res.explain(&self.workers[worker].workdir())?;
-        self.workers[worker].submit(res);
+        self.workers[worker].submit(res)?;
         Ok(())
     }
 
@@ -160,11 +162,17 @@ impl<'a, T: Test> Runner<'a, T> {
                 .expect("Workers should never disconnect first")
             {
                 JobResult { job, res: Ok(res) } => {
-                    // TODO: turn into one indicatif progress bar per worker
-                    tracing::info!(
-                        "Worker finished running with result {res:?} for job {}",
-                        job.description,
-                    );
+                    match res {
+                        JobStatus::Reduced => tracing::info!(
+                            "Job successfully reduced the input: {}",
+                            job.description,
+                        ),
+                        JobStatus::DidNotReduce => (),
+                        JobStatus::PassFailed => tracing::debug!(
+                            "Job failed to handle the input: {}",
+                            job.description,
+                        ),
+                    }
                     self.handle_result(w, job, res)?;
                     return Ok(Some((w, res)));
                 }
@@ -173,8 +181,8 @@ impl<'a, T: Test> Runner<'a, T> {
                         "Worker died while processing a job! Starting a new worker…\nJob: {}\nError:\n---\n{e:?}\n---",
                         job.description,
                     );
-                    self.workers.swap_remove(w);
-                    self.spawn_worker()?;
+                    let worker = self.workers.swap_remove(w);
+                    self.spawn_worker(worker.kill())?;
                 }
             }
         }

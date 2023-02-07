@@ -87,7 +87,7 @@ pub fn run(
     passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
     // Setup the progress bar
-    let progress = Arc::new(indicatif::MultiProgress::new());
+    let progress = indicatif::MultiProgress::new();
 
     // Setup tracing
     let logs = tracing_subscriber::fmt::Layer::default()
@@ -139,6 +139,7 @@ pub fn run(
         Duration::from_secs(opt.snapshot_interval),
         rng,
         opt.jobs,
+        progress,
     )?
     .run()
 }

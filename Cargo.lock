@@ -363,10 +363,10 @@ dependencies = [
 [[package]]
 name = "indicatif"
 version = "0.17.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cef509aa9bc73864d6756f0d34d35504af3cf0844373afe9b8669a5b8005a729"
+source = "git+https://github.com/Ekleog/indicatif?rev=025a566b861ed953e340e74f3008121a9b721ee3#025a566b861ed953e340e74f3008121a9b721ee3"
 dependencies = [
  "console",
+ "instant",
  "number_prefix",
  "portable-atomic",
  "unicode-width",
@@ -525,9 +525,9 @@ checksum = "e0a7ae3ac2f1173085d398531c705756c94a4c56843785df85a60c1a0afac116"
 
 [[package]]
 name = "portable-atomic"
-version = "0.3.19"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
+checksum = "39c00c8683a03bd4fe7db7dd64ab4abee6b42166bc81231da983486ce96be51a"
 
 [[package]]
 name = "ppv-lite86"

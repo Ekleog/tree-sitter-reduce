@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Context;
+use indicatif::ProgressBar;
 use tempfile::TempDir;
 
 use crate::{
@@ -16,6 +17,7 @@ pub(crate) struct Worker {
     rootdir: TempDir,
     sender: crossbeam_channel::Sender<Job>,
     receiver: crossbeam_channel::Receiver<JobResult>,
+    progress: ProgressBar,
 }
 
 struct WorkerThread<T> {
@@ -26,7 +28,14 @@ struct WorkerThread<T> {
 }
 
 impl Worker {
-    pub(crate) fn new(root: &Path, test: Arc<impl Test>) -> anyhow::Result<Self> {
+    pub(crate) fn new(
+        root: &Path,
+        test: Arc<impl Test>,
+        progress: ProgressBar,
+    ) -> anyhow::Result<Self> {
+        // Tick the progress bar every 100ms
+        progress.enable_steady_tick(std::time::Duration::from_millis(100));
+
         // First, copy the target into a directory
         let rootdir = clone_tempdir(root)?;
 
@@ -44,13 +53,26 @@ impl Worker {
             rootdir,
             receiver,
             sender,
+            progress,
         })
     }
 
-    pub(crate) fn submit(&self, j: Job) {
+    pub(crate) fn kill(self) -> ProgressBar {
+        // rootdir will be rm'd and worker will naturally die by dropping the sender
+        self.progress.disable_steady_tick();
+        self.progress
+    }
+
+    pub(crate) fn submit(&self, j: Job) -> anyhow::Result<()> {
+        let workdir = self.workdir();
+        self.progress
+            .set_message(j.explain(&workdir).with_context(|| {
+                format!("trying to use path {workdir:?} to describe job {j:?}")
+            })?);
         self.sender
             .try_send(j)
-            .expect("Tried to send a job while the previous job was not done yet")
+            .expect("Tried to send a job while the previous job was not done yet");
+        Ok(())
     }
 
     pub(crate) fn get_receiver(&self) -> &crossbeam_channel::Receiver<JobResult> {

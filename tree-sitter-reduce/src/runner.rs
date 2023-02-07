@@ -130,7 +130,7 @@ impl<'a, T: Test> Runner<'a, T> {
             if did_reduce && std::time::Instant::now() >= next_snap {
                 // We have passed next snap time!
                 self.snapshot()?;
-                next_snap += self.snap_interval;
+                next_snap = std::time::Instant::now() + self.snap_interval;
                 did_reduce = false;
             }
         }

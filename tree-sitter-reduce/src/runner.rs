@@ -67,7 +67,7 @@ impl<'a, T: Test> Runner<'a, T> {
         progress: indicatif::MultiProgress,
     ) -> anyhow::Result<Self> {
         let mut this = Runner {
-            root: copy_to_tempdir(&root)?,
+            root: copy_to_tempdir(&root)?, // Copy the target directory to a tempdir
             test: Arc::new(test),
             files: files.into_iter().map(|f| (f, FileInfo::new())).collect(),
             passes,
@@ -77,7 +77,16 @@ impl<'a, T: Test> Runner<'a, T> {
             rng,
         };
 
-        tracing::info!("Finished copying target directory, starting the reducing…");
+        // Check that the provided test actually returns true on the initial input
+        tracing::info!(
+            "Finished copying target directory, checking that the test finds it interesting"
+        );
+        anyhow::ensure!(
+            this.test.test_interesting(&this.root.path().join(WORKDIR))?,
+            "Test did not find the provided target directory interesting",
+        );
+
+        tracing::info!("The target directory was interesting, starting reducing…");
         for _ in 0..jobs {
             this.spawn_worker(progress.add(make_progress_bar()))?;
         }

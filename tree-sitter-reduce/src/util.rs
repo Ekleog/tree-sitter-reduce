@@ -2,7 +2,6 @@ use std::path::Path;
 
 use anyhow::Context;
 use tempfile::TempDir;
-use tracing_subscriber::layer::SubscriberExt;
 
 pub(crate) const WORKDIR: &str = "workdir";
 pub(crate) const TMPDIR: &str = "tmpdir";
@@ -45,11 +44,14 @@ pub(crate) fn init_env() -> anyhow::Result<indicatif::MultiProgress> {
     let progress = indicatif::MultiProgress::new();
 
     // Setup tracing
-    let logs = tracing_subscriber::fmt::Layer::default().with_writer(IndicatifWriter::new({
-        let progress = progress.clone();
-        move |buffer: &[u8]| progress.println(String::from_utf8_lossy(buffer))
-    }));
-    let subscriber = tracing_subscriber::Registry::default().with(logs);
+    let format = tracing_subscriber::fmt::format().with_target(false);
+    let subscriber = tracing_subscriber::fmt()
+        .event_format(format)
+        .with_writer(IndicatifWriter::new({
+            let progress = progress.clone();
+            move |buffer: &[u8]| progress.println(String::from_utf8_lossy(buffer))
+        }))
+        .finish();
     tracing::subscriber::set_global_default(subscriber).context("setting up logger")?;
 
     Ok(progress)

@@ -15,6 +15,11 @@ struct Opt {
     /// think this is the wrong way around, remember that just because the compiler
     /// crashes doesn't mean that it crashes the way you want; a syntax error is a
     /// crash.
+    ///
+    /// Note that the test MUST NOT change the contents of its working directory
+    /// in any way that could corrupt further runs! The working directory is NOT
+    /// cleared between each run; this is on purpose seeing how incremental
+    /// compilation makes each test much faster when dealing with large reproducers.
     test: PathBuf,
 
     #[structopt(flatten)]

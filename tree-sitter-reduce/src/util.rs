@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, time::Duration};
 
 use anyhow::Context;
 use tempfile::TempDir;
@@ -58,8 +58,21 @@ pub(crate) fn init_env() -> anyhow::Result<indicatif::MultiProgress> {
 }
 
 pub(crate) fn make_progress_bar() -> indicatif::ProgressBar {
-    indicatif::ProgressBar::new_spinner()
+    let progress_style =
+        indicatif::ProgressStyle::with_template("{prefix:.grey} {spinner:.blue} {wide_msg}")
+            .expect("Failed to build progress bar style")
+            .tick_strings(&[
+                "⢀⠀", "⡀⠀", "⠄⠀", "⢂⠀", "⡂⠀", "⠅⠀", "⢃⠀", "⡃⠀", "⠍⠀", "⢋⠀", "⡋⠀", "⠍⠁", "⢋⠁", "⡋⠁",
+                "⠍⠉", "⠋⠉", "⠋⠉", "⠉⠙", "⠉⠙", "⠉⠩", "⠈⢙", "⠈⡙", "⢈⠩", "⡀⢙", "⠄⡙", "⢂⠩", "⡂⢘", "⠅⡘",
+                "⢃⠨", "⡃⢐", "⠍⡐", "⢋⠠", "⡋⢀", "⠍⡁", "⢋⠁", "⡋⠁", "⠍⠉", "⠋⠉", "⠋⠉", "⠉⠙", "⠉⠙", "⠉⠩",
+                "⠈⢙", "⠈⡙", "⠈⠩", "⠀⢙", "⠀⡙", "⠀⠩", "⠀⢘", "⠀⡘", "⠀⠨", "⠀⢐", "⠀⡐", "⠀⠠", "⠀⢀", "⠀⡀",
+            ]);
+    let bar = indicatif::ProgressBar::new_spinner();
+    bar.set_style(progress_style);
+    bar
 }
+
+pub(crate) const BAR_TICK_INTERVAL: Duration = Duration::from_millis(100);
 
 // Used to make tracing work well with indicatif
 #[derive(Clone)]

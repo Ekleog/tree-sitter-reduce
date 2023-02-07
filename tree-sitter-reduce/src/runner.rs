@@ -13,7 +13,7 @@ use tempfile::TempDir;
 
 use crate::{
     job::{Job, JobResult, JobStatus},
-    util::{copy_dir_contents, copy_to_tempdir, make_progress_bar, WORKDIR},
+    util::{copy_dir_contents, copy_to_tempdir, make_progress_bar, BAR_TICK_INTERVAL, WORKDIR},
     workers::Worker,
     Pass, Test,
 };
@@ -78,13 +78,16 @@ impl<'a, T: Test> Runner<'a, T> {
         };
 
         // Check that the provided test actually returns true on the initial input
-        tracing::info!(
-            "Finished copying target directory, checking that the test finds it interesting"
-        );
+        tracing::info!("Finished copying target directory");
+        let bar = make_progress_bar();
+        bar.enable_steady_tick(BAR_TICK_INTERVAL);
+        bar.set_message("Checking that the provided target directory is interesting");
         anyhow::ensure!(
-            this.test.test_interesting(&this.root.path().join(WORKDIR))?,
+            this.test
+                .test_interesting(&this.root.path().join(WORKDIR))?,
             "Test did not find the provided target directory interesting",
         );
+        bar.finish_and_clear();
 
         tracing::info!("The target directory was interesting, starting reducing…");
         for _ in 0..jobs {

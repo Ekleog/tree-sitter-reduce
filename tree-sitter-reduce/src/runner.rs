@@ -13,7 +13,7 @@ use tempfile::TempDir;
 
 use crate::{
     job::{Job, JobResult, JobStatus},
-    util::{copy_dir_contents, copy_to_tempdir, WORKDIR},
+    util::{copy_dir_contents, copy_to_tempdir, make_progress_bar, WORKDIR},
     workers::Worker,
     Pass, Test,
 };
@@ -79,7 +79,7 @@ impl<'a, T: Test> Runner<'a, T> {
 
         tracing::info!("Finished copying target directory, starting the reducing…");
         for _ in 0..jobs {
-            this.spawn_worker(progress.add(ProgressBar::new_spinner()))?;
+            this.spawn_worker(progress.add(make_progress_bar()))?;
         }
 
         Ok(this)
@@ -168,10 +168,9 @@ impl<'a, T: Test> Runner<'a, T> {
                             job.description,
                         ),
                         JobStatus::DidNotReduce => (),
-                        JobStatus::PassFailed => tracing::debug!(
-                            "Job failed to handle the input: {}",
-                            job.description,
-                        ),
+                        JobStatus::PassFailed => {
+                            tracing::debug!("Job failed to handle the input: {}", job.description,)
+                        }
                     }
                     self.handle_result(w, job, res)?;
                     return Ok(Some((w, res)));

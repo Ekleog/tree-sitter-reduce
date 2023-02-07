@@ -184,7 +184,11 @@ impl<'a, T: Test> Runner<'a, T> {
             let w = oper.index();
 
             // If the signal came from the kill trigger, handle it
-            anyhow::ensure!(w != self.workers.len(), "Killed by the user");
+            if w == self.workers.len() {
+                oper.recv(&self.kill_trigger)
+                    .expect("Kill trigger should never disconnect at all");
+                anyhow::bail!("Killed by the user");
+            }
 
             // If not, read its message and act upon it
             match oper

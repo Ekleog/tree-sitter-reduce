@@ -51,6 +51,7 @@ pub(crate) struct Runner<'a, T> {
     snap_dir: PathBuf,
     snap_interval: Duration,
     workers: Vec<Worker>,
+    kill_trigger: crossbeam_channel::Receiver<()>,
     rng: StdRng,
 }
 
@@ -66,18 +67,31 @@ impl<'a, T: Test> Runner<'a, T> {
         jobs: usize,
         progress: indicatif::MultiProgress,
     ) -> anyhow::Result<Self> {
+        // Setup a ctrl-c handler that will kill us whenever
+        let (killer, kill_trigger) = crossbeam_channel::bounded(3);
+        ctrlc::set_handler(move || {
+            killer
+                .send(())
+                .expect("User asked to kill 3 times the reducer before it had the time to notice")
+        })
+        .context("setting the interruption handler")?;
+
+        // Copy the target directory to a tempdir
         let mut this = Runner {
-            root: copy_to_tempdir(&root)?, // Copy the target directory to a tempdir
+            root: copy_to_tempdir(&root)?,
             test: Arc::new(test),
             files: files.into_iter().map(|f| (f, FileInfo::new())).collect(),
             passes,
             snap_dir,
             snap_interval,
             workers: Vec::with_capacity(jobs),
+            kill_trigger,
             rng,
         };
 
         // Check that the provided test actually returns true on the initial input
+        // TODO: Also clean up if killed here. This is before we spawn workers, so a bit
+        // of refactoring will probably be needed.
         tracing::info!("Finished copying target directory");
         let bar = make_progress_bar();
         bar.enable_steady_tick(BAR_TICK_INTERVAL);
@@ -159,6 +173,7 @@ impl<'a, T: Test> Runner<'a, T> {
             for w in &self.workers {
                 sel.recv(w.get_receiver());
             }
+            sel.recv(&self.kill_trigger);
             let oper = match deadline {
                 None => sel.select(),
                 Some(deadline) => match sel.select_deadline(deadline) {
@@ -166,9 +181,12 @@ impl<'a, T: Test> Runner<'a, T> {
                     Err(crossbeam_channel::SelectTimeoutError) => return Ok(None),
                 },
             };
-
-            // Read its message and act upon it
             let w = oper.index();
+
+            // If the signal came from the kill trigger, handle it
+            anyhow::ensure!(w != self.workers.len(), "Killed by the user");
+
+            // If not, read its message and act upon it
             match oper
                 .recv(self.workers[w].get_receiver())
                 .expect("Workers should never disconnect first")

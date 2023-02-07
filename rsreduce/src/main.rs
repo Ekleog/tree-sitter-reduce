@@ -52,8 +52,14 @@ fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
         let file =
             file.with_context(|| format!("walking directory {root:?} looking for rust files"))?;
         if file.file_type().is_file() && file.file_name().to_string_lossy().ends_with(".rs") {
-            tracing::debug!("Found file to reduce: {:?}", file.path());
-            res.push(file.path().to_path_buf());
+            let path = file.path();
+            let path = path.strip_prefix(root).with_context(|| {
+                format!(
+                    "Path {path:?} was found in folder {root:?} but seems to not be a sub-element"
+                )
+            })?;
+            tracing::debug!("Found file to reduce: {path:?}");
+            res.push(path.to_path_buf());
         }
     }
     Ok(res)

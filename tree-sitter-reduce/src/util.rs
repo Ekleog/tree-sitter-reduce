@@ -45,14 +45,14 @@ pub(crate) fn init_env() -> anyhow::Result<indicatif::MultiProgress> {
 
     // Setup tracing
     let format = tracing_subscriber::fmt::format().with_target(false);
-    let subscriber = tracing_subscriber::fmt()
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .event_format(format)
         .with_writer(IndicatifWriter::new({
             let progress = progress.clone();
             move |buffer: &[u8]| progress.println(String::from_utf8_lossy(buffer))
         }))
-        .finish();
-    tracing::subscriber::set_global_default(subscriber).context("setting up logger")?;
+        .init();
 
     Ok(progress)
 }

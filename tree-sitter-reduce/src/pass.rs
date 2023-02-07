@@ -54,7 +54,8 @@ pub trait Pass: Debug + DynHash + Send + Sync {
     /// the file
     fn explain(
         &self,
-        path: &Path,
+        workdir: &Path,
+        path_in_workdir: &Path,
         random_seed: u64,
         recent_success_rate: u8,
     ) -> anyhow::Result<String>;

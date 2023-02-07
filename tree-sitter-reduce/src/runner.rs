@@ -129,15 +129,14 @@ impl<'a, T: Test> Runner<'a, T> {
         let pass = self.passes.choose(&mut self.rng).unwrap().clone();
         let seed = self.rng.gen();
         let recent_success_rate = info.recent_success_rate;
-        let mut res = Job {
-            path: relpath.clone(),
+        let job = Job::new(
+            &self.workers[worker].workdir(),
+            relpath.clone(),
             pass,
             seed,
-            recent_success_rate: recent_success_rate,
-            description: String::new(),
-        };
-        res.description = res.explain(&self.workers[worker].workdir())?;
-        self.workers[worker].submit(res)?;
+            recent_success_rate,
+        )?;
+        self.workers[worker].submit(job)?;
         Ok(())
     }
 

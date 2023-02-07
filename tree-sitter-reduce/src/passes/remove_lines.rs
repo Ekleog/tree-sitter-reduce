@@ -65,12 +65,16 @@ impl Pass for RemoveLines {
 
     fn explain(
         &self,
+        workdir: &Path,
         path: &Path,
         random_seed: u64,
         recent_success_rate: u8,
     ) -> anyhow::Result<String> {
-        let to_delete =
-            self.what_to_delete(&self.read_file(path)?, random_seed, recent_success_rate);
-        Ok(format!("remove_lines({to_delete:?})"))
+        let to_delete = self.what_to_delete(
+            &self.read_file(&workdir.join(path))?,
+            random_seed,
+            recent_success_rate,
+        );
+        Ok(format!("Remove lines {to_delete:?} of file {path:?}"))
     }
 }

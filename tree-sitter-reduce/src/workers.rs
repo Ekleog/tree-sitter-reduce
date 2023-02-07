@@ -66,6 +66,8 @@ impl Worker {
     pub(crate) fn submit(&self, j: Job) -> anyhow::Result<()> {
         let workdir = self.workdir();
         self.progress
+            .set_prefix(format!("#{:04x}", j.hash() % 0xFFFF));
+        self.progress
             .set_message(j.explain(&workdir).with_context(|| {
                 format!("trying to use path {workdir:?} to describe job {j:?}")
             })?);

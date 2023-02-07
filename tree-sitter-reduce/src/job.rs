@@ -5,8 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::Context;
-
 use crate::Pass;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,30 +29,33 @@ pub(crate) struct JobResult {
 }
 
 impl Job {
-    fn hash(&self, state: &mut DefaultHasher) {
-        self.path.hash(state);
-        self.pass.dyn_hash(state);
-        self.seed.hash(state);
-        self.recent_success_rate.hash(state);
+    pub fn new(
+        workdir: &Path,
+        path: PathBuf,
+        pass: Arc<dyn Pass>,
+        seed: u64,
+        recent_success_rate: u8,
+    ) -> anyhow::Result<Job> {
+        Ok(Job {
+            description: pass.explain(&workdir, &path, seed, recent_success_rate)?,
+            path,
+            pass,
+            seed,
+            recent_success_rate,
+        })
     }
-}
 
-impl Job {
-    pub fn explain(&self, workdir: &Path) -> anyhow::Result<String> {
+    pub fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        let hash = hasher.finish();
-        let full_path = workdir.join(&self.path);
-        Ok(format!(
-            "{}@{:?}#{:04x}",
-            self.pass
-                .explain(&full_path, self.seed, self.recent_success_rate)
-                .with_context(|| format!(
-                    "explaining pass for job {:?} in workdir {workdir:?}",
-                    self
-                ))?,
-            &self.path,
-            hash % 0xFFFF,
-        ))
+        self.path.hash(&mut hasher);
+        self.pass.dyn_hash(&mut hasher);
+        self.seed.hash(&mut hasher);
+        self.recent_success_rate.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    pub fn explain(&self, workdir: &Path) -> anyhow::Result<String> {
+        self.pass
+            .explain(workdir, &self.path, self.seed, self.recent_success_rate)
     }
 }

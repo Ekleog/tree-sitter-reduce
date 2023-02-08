@@ -15,7 +15,7 @@ use crate::{
     job::{Job, JobResult, JobStatus},
     util::{copy_dir_contents, copy_to_tempdir, make_progress_bar, BAR_TICK_INTERVAL, WORKDIR},
     workers::Worker,
-    Pass, Test,
+    Pass, Test, TestResult,
 };
 
 struct FileInfo {
@@ -100,14 +100,19 @@ impl<'a, T: Test> Runner<'a, T> {
             let bar = make_progress_bar();
             bar.enable_steady_tick(BAR_TICK_INTERVAL);
             bar.set_message("Checking that the provided target directory is interesting");
-            anyhow::ensure!(
-                this.test.test_interesting(
-                    &this.root.path().join(WORKDIR),
-                    "Validate input interestingness",
-                    0
-                )?,
-                "Test did not find the provided target directory interesting",
-            );
+            let res = this.test.test_interesting(
+                &this.root.path().join(WORKDIR),
+                &this.kill_trigger,
+                "Validate input interestingness",
+                0,
+            )?;
+            match res {
+                TestResult::Interesting => (),
+                TestResult::NotInteresting => {
+                    anyhow::bail!("Test did not find the provided target directory interesting")
+                }
+                TestResult::Interrupted => anyhow::bail!("Killed by user"),
+            }
             bar.finish_and_clear();
             tracing::info!("The target directory was interesting, starting reducing…");
         }
@@ -188,6 +193,9 @@ impl<'a, T: Test> Runner<'a, T> {
             if w == self.workers.len() {
                 oper.recv(&self.kill_trigger)
                     .expect("Kill trigger should never disconnect at all");
+                for w in self.workers.drain(..) {
+                    w.kill();
+                }
                 anyhow::bail!("Killed by the user");
             }
 
@@ -205,6 +213,7 @@ impl<'a, T: Test> Runner<'a, T> {
                         JobStatus::PassFailed(desc) => {
                             tracing::debug!("Job failed to handle the input: {desc}")
                         }
+                        JobStatus::Interrupted => panic!("Got interrupted job result even though that should happen only after the runner itself is stopped"),
                     }
                     self.handle_result(w, job, &res)?;
                     return Ok(Some((w, res)));
@@ -229,6 +238,7 @@ impl<'a, T: Test> Runner<'a, T> {
             }
             // TODO: do something to avoid trying this pass again on the same file just after?
             JobStatus::PassFailed(_) => (),
+            JobStatus::Interrupted => panic!("Got interrupted job result even though that should happen only after the runner itself is stopped"),
         }
         Ok(())
     }

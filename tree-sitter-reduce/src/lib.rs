@@ -10,4 +10,4 @@ pub use job::{Job, JobStatus};
 pub use pass::Pass;
 pub mod passes;
 pub use run::{run, Opt};
-pub use test::{ShellTest, Test};
+pub use test::{ShellTest, Test, TestResult};

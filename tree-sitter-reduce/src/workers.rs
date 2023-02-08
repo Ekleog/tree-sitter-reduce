@@ -10,13 +10,14 @@ use tempfile::TempDir;
 use crate::{
     job::{Job, JobResult, JobStatus},
     util::{clone_tempdir, TMPDIR, WORKDIR},
-    Test,
+    Test, TestResult,
 };
 
 pub(crate) struct Worker {
     rootdir: TempDir,
     sender: crossbeam_channel::Sender<Job>,
     receiver: crossbeam_channel::Receiver<JobResult>,
+    killer: crossbeam_channel::Sender<()>,
     progress: ProgressBar,
 }
 
@@ -25,6 +26,7 @@ struct WorkerThread<T> {
     test: T,
     receiver: crossbeam_channel::Receiver<Job>,
     sender: crossbeam_channel::Sender<JobResult>,
+    kill_trigger: crossbeam_channel::Receiver<()>,
 }
 
 impl Worker {
@@ -42,6 +44,7 @@ impl Worker {
         // Then, prepare the communications channels
         let (sender, worker_receiver) = crossbeam_channel::bounded(1);
         let (worker_sender, receiver) = crossbeam_channel::bounded(1);
+        let (killer, kill_trigger) = crossbeam_channel::bounded(1);
 
         // Finally, spawn a thread!
         std::thread::spawn({
@@ -54,6 +57,7 @@ impl Worker {
                     ReportingTest(test, progress),
                     worker_receiver,
                     worker_sender,
+                    kill_trigger,
                 )
                 .run()
             }
@@ -62,6 +66,7 @@ impl Worker {
             rootdir,
             receiver,
             sender,
+            killer,
             progress,
         })
     }
@@ -69,6 +74,9 @@ impl Worker {
     pub(crate) fn kill(self) -> ProgressBar {
         // rootdir will be rm'd and worker will naturally die by dropping the sender
         self.progress.disable_steady_tick();
+        self.killer
+            .send(())
+            .expect("Failed sending kill request to worker thread");
         self.progress
     }
 
@@ -94,12 +102,14 @@ impl<T: Test> WorkerThread<T> {
         test: T,
         receiver: crossbeam_channel::Receiver<Job>,
         sender: crossbeam_channel::Sender<JobResult>,
+        kill_trigger: crossbeam_channel::Receiver<()>,
     ) -> Self {
         Self {
             rootdir,
             test,
             receiver,
             sender,
+            kill_trigger,
         }
     }
 
@@ -142,7 +152,7 @@ impl<T: Test> WorkerThread<T> {
 
         let res = job
             .pass
-            .reduce(&workdir, &self.test, &job)
+            .reduce(&workdir, &self.test, &job, &self.kill_trigger)
             .with_context(|| format!("reducing with pass {job:?}"))?;
 
         if !res.did_reduce() {
@@ -164,12 +174,15 @@ impl<T: Test> Test for ReportingTest<T> {
     fn test_interesting(
         &self,
         root: &Path,
+        kill_trigger: &crossbeam_channel::Receiver<()>,
         attempt_name: &str,
         attempt_id: u64,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<TestResult> {
         self.1.set_prefix(format!("#{:04x}", attempt_id % 0xFFFF));
         self.1.set_message(String::from(attempt_name));
-        let res = self.0.test_interesting(root, attempt_name, attempt_id);
+        let res = self
+            .0
+            .test_interesting(root, kill_trigger, attempt_name, attempt_id);
         self.1
             .set_message("Figuring out which pass to attempt next");
         res

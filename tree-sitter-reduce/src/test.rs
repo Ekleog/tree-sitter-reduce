@@ -1,5 +1,15 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::Context;
+use crossbeam_channel::RecvTimeoutError;
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum TestResult {
+    Interesting,
+    NotInteresting,
+    Interrupted,
+}
+
 pub trait Test: 'static + Send + Sync {
     /// Run the test
     ///
@@ -10,14 +20,19 @@ pub trait Test: 'static + Send + Sync {
     /// Note that if this returns `Err` then the current checkout will be considered
     /// broken and removed, so it should avoid doing so whenever possible.
     ///
+    /// If a message is ever received on `kill_trigger`, the test should, as quickly
+    /// as reasonably doable, stop testing the current input, restore the test folder
+    /// to a state where another test can be run, and return `TestResult::Interrupted`.
+    ///
     /// `attempt_name` is a human-readable message that describes what is being tried
     /// by running this test. `attempt_id` is a hash of the same.
     fn test_interesting(
         &self,
         root: &Path,
+        kill_trigger: &crossbeam_channel::Receiver<()>,
         attempt_name: &str,
         attempt_id: u64,
-    ) -> anyhow::Result<bool>;
+    ) -> anyhow::Result<TestResult>;
 
     /// Cleanup a snapshot folder
     ///
@@ -90,15 +105,41 @@ where
     fn test_interesting(
         &self,
         root: &Path,
+        kill_trigger: &crossbeam_channel::Receiver<()>,
         _attempt_name: &str,
         _attempt_id: u64,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<TestResult> {
         (self.prep)(root)?;
-        let res = std::process::Command::new(&self.test)
+        let mut child = std::process::Command::new(&self.test)
             .current_dir(root)
-            .output()?
-            .status
-            .success();
+            .spawn()
+            .with_context(|| {
+                format!("spawning test command {:?} in workdir {root:?}", self.test)
+            })?;
+        let res = 'res: loop {
+            match child.try_wait() {
+                Ok(Some(exit)) => {
+                    break 'res Ok(match exit.success() {
+                        true => TestResult::Interesting,
+                        false => TestResult::NotInteresting,
+                    })
+                }
+                Err(e) => break 'res Err(e).context("waiting for child command"),
+                Ok(None) => (),
+            }
+            match kill_trigger.recv_timeout(std::time::Duration::from_millis(100)) {
+                Err(e @ RecvTimeoutError::Disconnected) => {
+                    break 'res Err(e).context("waiting for kill trigger")
+                }
+                Err(RecvTimeoutError::Timeout) => (),
+                Ok(()) => {
+                    if let Err(e) = child.kill() {
+                        break 'res Err(e).context("killing child");
+                    }
+                    break 'res Ok(TestResult::Interrupted);
+                }
+            }
+        }?;
         (self.clean)(root)?;
         Ok(res)
     }

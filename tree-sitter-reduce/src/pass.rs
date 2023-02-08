@@ -8,6 +8,8 @@ use crate::{
 pub trait Pass: Debug + DynHash + Send + Sync {
     /// Edit the file at `path`, simplifying it
     ///
+    /// `kill_trigger` should be passed through to the `Test::test_interesting`.
+    ///
     /// Note that for proper operation this MUST BE DETERMINISTIC! For this reason, a
     /// `random_seed` argument is provided, which the pass can use to initialize an RNG.
     /// Also, this path should not edit the other files in `workdir`, but only use it
@@ -29,7 +31,13 @@ pub trait Pass: Debug + DynHash + Send + Sync {
     ///
     /// Also note that the pass is allowed to run the test multiple times, in order to
     /// implement things such as dichotomy.
-    fn reduce(&self, workdir: &Path, test: &dyn Test, job: &Job) -> anyhow::Result<JobStatus>;
+    fn reduce(
+        &self,
+        workdir: &Path,
+        test: &dyn Test,
+        job: &Job,
+        kill_trigger: &crossbeam_channel::Receiver<()>,
+    ) -> anyhow::Result<JobStatus>;
 }
 
 pub trait DynHash {

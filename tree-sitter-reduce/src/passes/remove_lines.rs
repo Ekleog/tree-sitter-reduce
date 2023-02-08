@@ -6,7 +6,7 @@ use rand_distr::{Distribution, Exp1};
 
 use crate::{
     job::{Job, JobStatus},
-    Pass, Test,
+    Pass, Test, TestResult,
 };
 
 #[derive(Debug, Hash)]
@@ -37,7 +37,13 @@ impl RemoveLines {
 }
 
 impl Pass for RemoveLines {
-    fn reduce(&self, workdir: &Path, test: &dyn Test, job: &Job) -> anyhow::Result<JobStatus> {
+    fn reduce(
+        &self,
+        workdir: &Path,
+        test: &dyn Test,
+        job: &Job,
+        kill_trigger: &crossbeam_channel::Receiver<()>,
+    ) -> anyhow::Result<JobStatus> {
         let path = workdir.join(&job.path);
         let file =
             std::fs::read_to_string(&path).with_context(|| format!("reading file {path:?}"))?;
@@ -64,11 +70,12 @@ impl Pass for RemoveLines {
 
         let attempt = format!("Remove lines {to_delete:?} of file {:?}", job.path);
         match test
-            .test_interesting(workdir, &attempt, job.id(0))
+            .test_interesting(workdir, kill_trigger, &attempt, job.id(0))
             .context("running the test")?
         {
-            true => Ok(JobStatus::Reduced(attempt)),
-            false => Ok(JobStatus::DidNotReduce),
+            TestResult::Interesting => Ok(JobStatus::Reduced(attempt)),
+            TestResult::NotInteresting => Ok(JobStatus::DidNotReduce),
+            TestResult::Interrupted => Ok(JobStatus::Interrupted),
         }
     }
 }

@@ -14,6 +14,8 @@ pub enum JobStatus {
     /// The `String` is a human-readable description of which changes the pass
     /// ended up performing on the input to get to the reduced input.
     Reduced(String),
+
+    /// Job did not find a way to reduce the input
     DidNotReduce,
 
     /// Job failed to apply to the input
@@ -21,6 +23,9 @@ pub enum JobStatus {
     /// The `String` is a human-readable description of why the pass could not apply.
     /// For example, `Could not remove functions in a file with no functions`.
     PassFailed(String),
+
+    /// The pass run was interrupted
+    Interrupted,
 }
 
 impl JobStatus {

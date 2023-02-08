@@ -4,7 +4,7 @@ use anyhow::Context;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::{Distribution, Exp1};
 
-use crate::Pass;
+use crate::{job::JobStatus, Pass, Test};
 
 #[derive(Debug, Hash)]
 pub struct RemoveLines {
@@ -40,14 +40,16 @@ impl RemoveLines {
 impl Pass for RemoveLines {
     fn reduce(
         &self,
+        workdir: &Path,
+        test: &dyn Test,
         path: &Path,
         random_seed: u64,
         recent_success_rate: u8,
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<JobStatus> {
         let file = self.read_file(path)?;
         let to_delete = match self.what_to_delete(&file, random_seed, recent_success_rate) {
             Some(d) => d,
-            None => return Ok(false),
+            None => return Ok(JobStatus::PassFailed),
         };
 
         let mut new_data = String::with_capacity(file.len());
@@ -60,7 +62,12 @@ impl Pass for RemoveLines {
 
         std::fs::write(path, new_data)
             .with_context(|| format!("writing file {path:?} with reduced data"))?;
-        Ok(true)
+
+        match test.test_interesting(workdir).context("running the test")? {
+            true => Ok(JobStatus::Reduced),
+            false => Ok(JobStatus::DidNotReduce),
+        }
+        // TODO: actually use dichotomy here
     }
 
     fn explain(

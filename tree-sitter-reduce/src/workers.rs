@@ -142,30 +142,16 @@ impl<T: Test> WorkerThread<T> {
         std::fs::copy(&filepath, &tmpfilepath)
             .with_context(|| format!("saving file {tmpfilepath:?} before pass {job:?}"))?;
 
-        job.pass
-            .prepare(&workdir)
-            .with_context(|| format!("preparing for pass {job:?}"))?;
-
-        if !job
+        let res = job
             .pass
-            .reduce(&filepath, job.seed, job.recent_success_rate)
-            .with_context(|| format!("reducing with pass {job:?}"))?
-        {
-            return Ok(JobStatus::PassFailed);
-        }
-
-        let res = match self
-            .test
-            .test_interesting(&workdir)
-            .with_context(|| format!("running test (after pass {job:?})"))?
-        {
-            true => JobStatus::Reduced,
-            false => JobStatus::DidNotReduce,
-        };
-
-        job.pass
-            .cleanup(&workdir, res)
-            .with_context(|| format!("cleaning up after pass {job:?}"))?;
+            .reduce(
+                &workdir,
+                &*self.test,
+                &filepath,
+                job.seed,
+                job.recent_success_rate,
+            )
+            .with_context(|| format!("reducing with pass {job:?}"))?;
 
         if res != JobStatus::Reduced {
             std::fs::copy(&tmpfilepath, &filepath).with_context(|| {

@@ -63,6 +63,10 @@ pub struct Opt {
     /// Skip checking whether the provided target directory is interesting
     #[structopt(long)]
     do_not_validate_input: bool,
+
+    /// Do not display the spinners with current job info
+    #[structopt(long)]
+    no_progress_bars: bool,
 }
 
 impl Opt {
@@ -89,7 +93,7 @@ pub fn run(
     test: impl Test,
     passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
-    let progress = init_env()?;
+    let progress = init_env(opt.no_progress_bars)?;
 
     // Handle the arguments
     let root = opt.canonicalized_root_path()?;

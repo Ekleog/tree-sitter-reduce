@@ -39,21 +39,29 @@ pub(crate) fn copy_to_tempdir(root: &Path) -> anyhow::Result<TempDir> {
     Ok(dir)
 }
 
-pub(crate) fn init_env() -> anyhow::Result<indicatif::MultiProgress> {
+pub(crate) fn init_env(no_progress_bars: bool) -> anyhow::Result<indicatif::MultiProgress> {
     // Setup the progress bar
     let progress = indicatif::MultiProgress::new();
     progress.set_move_cursor(true);
 
     // Setup tracing
     let format = tracing_subscriber::fmt::format().with_target(false);
-    tracing_subscriber::fmt()
+    let subscriber = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .event_format(format)
-        .with_writer(IndicatifWriter::new({
-            let progress = progress.clone();
-            move |buffer: &[u8]| progress.println(String::from_utf8_lossy(buffer))
-        }))
-        .init();
+        .event_format(format);
+
+    // Enable (or not) drawing the bars
+    if no_progress_bars {
+        subscriber.init();
+        progress.set_draw_target(indicatif::ProgressDrawTarget::hidden());
+    } else {
+        subscriber
+            .with_writer(IndicatifWriter::new({
+                let progress = progress.clone();
+                move |buffer: &[u8]| progress.println(String::from_utf8_lossy(buffer))
+            }))
+            .init();
+    }
 
     Ok(progress)
 }

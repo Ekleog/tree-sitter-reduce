@@ -1,65 +1,63 @@
 use std::{ops::Range, path::Path};
 
 use anyhow::Context;
+// TODO: actually use dichotomy here
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use rand_distr::{Distribution, Exp1};
 
 use crate::{
     job::{Job, JobStatus},
-    Pass, Test, TestResult,
+    Test, TestResult,
 };
+
+use super::DichotomyPass;
 
 #[derive(Debug, Hash)]
 pub struct RemoveLines {
     pub average: usize,
 }
 
-impl RemoveLines {
-    fn what_to_delete(
-        &self,
-        file: &str,
-        random_seed: u64,
-        recent_success_rate: u8,
-    ) -> Option<Range<usize>> {
-        let mut rng = StdRng::seed_from_u64(random_seed);
-        let delete_lots: f32 = Exp1.sample(&mut rng); // average is 1
-        let wanted_average = (f32::from(recent_success_rate) + 1.) * 20. / 256.;
-        let num_dels = 1 + (delete_lots * wanted_average) as usize; // make avg somewhat related to success rate
-        let num_lines = file.lines().count();
-        match num_lines {
-            0 => None,
-            _ => Some({
-                let delete_from = rng.gen_range(0..num_lines);
-                delete_from..std::cmp::min(num_lines, delete_from + num_dels)
-            }),
-        }
-    }
-}
+impl DichotomyPass for RemoveLines {
+    type Attempt = Range<usize>;
 
-impl Pass for RemoveLines {
-    fn reduce(
+    fn list_attempts(
+        &self,
+        _workdir: &Path,
+        job: &Job,
+        file_contents: &str,
+        _kill_trigger: &crossbeam_channel::Receiver<()>,
+    ) -> anyhow::Result<Vec<Self::Attempt>> {
+        let mut rng = StdRng::seed_from_u64(job.random_seed);
+        let num_lines = file_contents.lines().count();
+        if num_lines == 0 {
+            return Ok(Vec::new());
+        }
+        let mut res = Vec::with_capacity(num_lines.ilog2() as usize + 1);
+        let mut start_at = rng.gen_range(0..num_lines);
+        let mut len = 1;
+        while len < num_lines {
+            res.push(start_at..(start_at + len));
+            start_at = start_at.saturating_sub(rng.gen_range(0..len));
+            len += rng.gen_range(1..(2 * len));
+        }
+        res.push(0..num_lines);
+        Ok(res)
+    }
+
+    fn attempt_reduce(
         &self,
         workdir: &Path,
         test: &dyn Test,
+        attempt: Self::Attempt,
+        attempt_number: usize,
         job: &Job,
+        file_contents: &str,
         kill_trigger: &crossbeam_channel::Receiver<()>,
     ) -> anyhow::Result<JobStatus> {
         let path = workdir.join(&job.path);
-        let file =
-            std::fs::read_to_string(&path).with_context(|| format!("reading file {path:?}"))?;
 
-        let to_delete = match self.what_to_delete(&file, job.random_seed, job.recent_success_rate) {
-            Some(d) => d,
-            None => {
-                return Ok(JobStatus::PassFailed(String::from(
-                    "Cannot remove lines from an empty file",
-                )))
-            }
-        };
-
-        let mut new_data = String::with_capacity(file.len());
-        for (l, line) in file.lines().enumerate() {
-            if !to_delete.contains(&l) {
+        let mut new_data = String::with_capacity(file_contents.len());
+        for (l, line) in file_contents.lines().enumerate() {
+            if !attempt.contains(&l) {
                 new_data.push_str(line);
                 new_data.push('\n');
             }
@@ -68,9 +66,9 @@ impl Pass for RemoveLines {
         std::fs::write(&path, new_data)
             .with_context(|| format!("writing file {path:?} with reduced data"))?;
 
-        let attempt = format!("Remove lines {to_delete:?} of file {:?}", job.path);
+        let attempt = format!("Remove lines {attempt:?} of file {:?}", job.path);
         match test
-            .test_interesting(workdir, kill_trigger, &attempt, job.id(0))
+            .test_interesting(workdir, kill_trigger, &attempt, job.id(attempt_number))
             .context("running the test")?
         {
             TestResult::Interesting => Ok(JobStatus::Reduced(attempt)),

@@ -1,6 +1,9 @@
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
 };
 
 use anyhow::Context;
@@ -18,6 +21,7 @@ pub(crate) struct Worker {
     sender: crossbeam_channel::Sender<Job>,
     receiver: crossbeam_channel::Receiver<JobResult>,
     killer: crossbeam_channel::Sender<()>,
+    job_running: Arc<AtomicBool>,
     progress: ProgressBar,
 }
 
@@ -27,6 +31,7 @@ struct WorkerThread<T> {
     receiver: crossbeam_channel::Receiver<Job>,
     sender: crossbeam_channel::Sender<JobResult>,
     kill_trigger: crossbeam_channel::Receiver<()>,
+    job_running: Arc<AtomicBool>,
 }
 
 impl Worker {
@@ -45,9 +50,11 @@ impl Worker {
         let (sender, worker_receiver) = crossbeam_channel::bounded(1);
         let (worker_sender, receiver) = crossbeam_channel::bounded(1);
         let (killer, kill_trigger) = crossbeam_channel::bounded(1);
+        let job_running = Arc::new(AtomicBool::new(false));
 
         // Finally, spawn a thread!
         std::thread::spawn({
+            let job_running = job_running.clone();
             let progress = progress.clone();
             let rootdir = rootdir.path().to_path_buf();
             let test = test.clone();
@@ -58,6 +65,7 @@ impl Worker {
                     worker_receiver,
                     worker_sender,
                     kill_trigger,
+                    job_running,
                 )
                 .run()
             }
@@ -67,20 +75,32 @@ impl Worker {
             receiver,
             sender,
             killer,
+            job_running,
             progress,
         })
     }
 
-    pub(crate) fn kill(self) -> ProgressBar {
-        // rootdir will be rm'd and worker will naturally die by dropping the sender
-        self.progress.disable_steady_tick();
+    pub(crate) fn send_kill(&self) {
         self.killer
             .send(())
-            .expect("Failed sending kill request to worker thread");
+            .expect("Failed sending kill request to worker thread")
+    }
+
+    pub(crate) fn recover_bar(self) -> ProgressBar {
+        // rootdir will be rm'd and worker will naturally die by dropping the sender
+        assert!(
+            !self.job_running.load(Ordering::Relaxed),
+            "Tried to recover the bar of a worker that still has a job running"
+        );
+        self.progress.disable_steady_tick();
         self.progress
     }
 
     pub(crate) fn submit(&self, j: Job) -> anyhow::Result<()> {
+        assert!(
+            !self.job_running.swap(true, Ordering::Relaxed),
+            "Tried to submit a job to a worker that still has a job running"
+        );
         self.sender
             .try_send(j)
             .expect("Tried to send a job while the previous job was not done yet");
@@ -103,6 +123,7 @@ impl<T: Test> WorkerThread<T> {
         receiver: crossbeam_channel::Receiver<Job>,
         sender: crossbeam_channel::Sender<JobResult>,
         kill_trigger: crossbeam_channel::Receiver<()>,
+        job_running: Arc<AtomicBool>,
     ) -> Self {
         Self {
             rootdir,
@@ -110,6 +131,7 @@ impl<T: Test> WorkerThread<T> {
             receiver,
             sender,
             kill_trigger,
+            job_running,
         }
     }
 
@@ -127,11 +149,16 @@ impl<T: Test> WorkerThread<T> {
 
     fn run(self) {
         for job in self.receiver.iter() {
+            let res = JobResult {
+                res: self.run_job(job.clone()),
+                job,
+            };
+            assert!(
+                self.job_running.swap(false, Ordering::Relaxed),
+                "Ran a job but job_running was not set to true"
+            );
             self.sender
-                .try_send(JobResult {
-                    res: self.run_job(job.clone()),
-                    job,
-                })
+                .try_send(res)
                 .expect("Main thread submitted a job before reading the previous result");
         }
     }

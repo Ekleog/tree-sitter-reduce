@@ -151,6 +151,8 @@ impl<'a, T: Test> Runner<'a, T> {
         let mut next_snap = std::time::Instant::now() + self.snap_interval;
         let mut did_reduce = false;
         loop {
+            // Note: `snap_interval` can be equal to 0, so if we did not have this match
+            // we would be busy-looping.
             let worker = match did_reduce {
                 true => self.wait_for_worker(Some(next_snap))?,
                 false => self.wait_for_worker(None)?,
@@ -194,7 +196,7 @@ impl<'a, T: Test> Runner<'a, T> {
                 oper.recv(&self.kill_trigger)
                     .expect("Kill trigger should never disconnect at all");
                 for w in self.workers.drain(..) {
-                    w.kill();
+                    w.send_kill();
                 }
                 anyhow::bail!("Killed by the user");
             }
@@ -221,7 +223,7 @@ impl<'a, T: Test> Runner<'a, T> {
                 JobResult { job, res: Err(e) } => {
                     tracing::error!("Worker died while processing a job! Starting a new worker…\nJob: {job:?}\nError:\n---\n{e:?}\n---");
                     let worker = self.workers.swap_remove(w);
-                    self.spawn_worker(worker.kill())?;
+                    self.spawn_worker(worker.recover_bar())?;
                 }
             }
         }
@@ -262,8 +264,23 @@ impl<'a, T: Test> Runner<'a, T> {
         // Restart other workers so they actually take advantage of it
         let mut workers_to_restart = self.workers.drain(..worker).collect::<Vec<_>>();
         workers_to_restart.extend(self.workers.drain((worker + 1)..));
-        for w in workers_to_restart {
-            self.spawn_worker(w.kill())
+        for w in &workers_to_restart {
+            w.send_kill();
+        }
+        while !workers_to_restart.is_empty() {
+            let mut sel = crossbeam_channel::Select::new();
+            for w in workers_to_restart.iter() {
+                sel.recv(w.get_receiver());
+            }
+            sel.recv(&self.kill_trigger);
+            let oper = sel.select();
+            let w = oper.index();
+            if w == workers_to_restart.len() {
+                anyhow::bail!("Killed by user");
+            }
+            let _ = oper.recv(workers_to_restart[w].get_receiver());
+            let worker = workers_to_restart.swap_remove(w);
+            self.spawn_worker(worker.recover_bar())
                 .context("restarting workers after one of them found a successful reduction")?;
         }
         Ok(())

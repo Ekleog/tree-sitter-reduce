@@ -15,18 +15,22 @@ pub struct RemoveLines;
 
 impl DichotomyPass for RemoveLines {
     type Attempt = Range<usize>;
+    type Parsed = String;
 
     fn list_attempts(
         &self,
-        _workdir: &Path,
+        workdir: &Path,
         job: &Job,
-        file_contents: &str,
         _kill_trigger: &crossbeam_channel::Receiver<()>,
-    ) -> anyhow::Result<Vec<Self::Attempt>> {
+    ) -> anyhow::Result<(Self::Parsed, Vec<Self::Attempt>)> {
+        let path = workdir.join(&job.path);
+        let file_contents =
+            std::fs::read_to_string(&path).with_context(|| format!("reading file {path:?}"))?;
+
         let mut rng = StdRng::seed_from_u64(job.random_seed);
         let num_lines = file_contents.lines().count();
         if num_lines == 0 {
-            return Ok(Vec::new());
+            return Ok((file_contents, Vec::new()));
         }
         let mut res = Vec::with_capacity(num_lines.ilog2() as usize + 1);
         let mut start_at = rng.gen_range(0..num_lines);
@@ -37,7 +41,7 @@ impl DichotomyPass for RemoveLines {
             len += rng.gen_range(1..(2 * len));
         }
         res.push(0..num_lines);
-        Ok(res)
+        Ok((file_contents, res))
     }
 
     fn attempt_reduce(
@@ -47,7 +51,7 @@ impl DichotomyPass for RemoveLines {
         attempt: Self::Attempt,
         attempt_number: usize,
         job: &Job,
-        file_contents: &str,
+        file_contents: &Self::Parsed,
         kill_trigger: &crossbeam_channel::Receiver<()>,
     ) -> anyhow::Result<JobStatus> {
         let path = workdir.join(&job.path);

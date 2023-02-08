@@ -175,6 +175,9 @@ pub fn run(
     if opt.resume && opt.root_path.is_some() {
         tracing::warn!("You provided a root path but asked to resume. The root path will be ignored in favor of the latest snapshot");
     }
+    if opt.resume && opt.do_not_validate_input {
+        tracing::warn!("You asked to resume without validating the input. This is usually a bad idea, remember that a snapshot could be half-written before the program stopped.");
+    }
 
     // Actually run
     tracing::info!("Initial seed is < {seed} >. It can be used for reproduction if running with a single worker thread");

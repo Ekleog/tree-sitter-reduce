@@ -59,6 +59,10 @@ pub struct Opt {
     /// Seed for the random number generation
     #[structopt(long)]
     random_seed: Option<u64>,
+
+    /// Skip checking whether the provided target directory is interesting
+    #[structopt(long)]
+    do_not_validate_input: bool,
 }
 
 impl Opt {
@@ -129,6 +133,7 @@ pub fn run(
         rng,
         opt.jobs,
         progress,
+        opt.do_not_validate_input,
     )?
     .run()
 }

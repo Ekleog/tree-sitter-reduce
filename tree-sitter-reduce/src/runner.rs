@@ -66,6 +66,7 @@ impl<'a, T: Test> Runner<'a, T> {
         rng: StdRng,
         jobs: usize,
         progress: indicatif::MultiProgress,
+        do_not_validate_input: bool,
     ) -> anyhow::Result<Self> {
         // Setup a ctrl-c handler that will kill us whenever
         let (killer, kill_trigger) = crossbeam_channel::bounded(3);
@@ -93,17 +94,21 @@ impl<'a, T: Test> Runner<'a, T> {
         // TODO: Also clean up if killed here. This is before we spawn workers, so a bit
         // of refactoring will probably be needed.
         tracing::info!("Finished copying target directory");
-        let bar = make_progress_bar();
-        bar.enable_steady_tick(BAR_TICK_INTERVAL);
-        bar.set_message("Checking that the provided target directory is interesting");
-        anyhow::ensure!(
-            this.test
-                .test_interesting(&this.root.path().join(WORKDIR))?,
-            "Test did not find the provided target directory interesting",
-        );
-        bar.finish_and_clear();
+        if do_not_validate_input {
+            tracing::warn!("Not validating the target directory. Note that validation does not make a reduction take significantly longer, but does avoid long useless waits due to malformed input.");
+        } else {
+            let bar = make_progress_bar();
+            bar.enable_steady_tick(BAR_TICK_INTERVAL);
+            bar.set_message("Checking that the provided target directory is interesting");
+            anyhow::ensure!(
+                this.test
+                    .test_interesting(&this.root.path().join(WORKDIR))?,
+                "Test did not find the provided target directory interesting",
+            );
+            bar.finish_and_clear();
+            tracing::info!("The target directory was interesting, starting reducing…");
+        }
 
-        tracing::info!("The target directory was interesting, starting reducing…");
         for _ in 0..jobs {
             this.spawn_worker(progress.add(make_progress_bar()))?;
         }

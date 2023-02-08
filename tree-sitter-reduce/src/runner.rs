@@ -101,8 +101,11 @@ impl<'a, T: Test> Runner<'a, T> {
             bar.enable_steady_tick(BAR_TICK_INTERVAL);
             bar.set_message("Checking that the provided target directory is interesting");
             anyhow::ensure!(
-                this.test
-                    .test_interesting(&this.root.path().join(WORKDIR))?,
+                this.test.test_interesting(
+                    &this.root.path().join(WORKDIR),
+                    "Validate input interestingness",
+                    0
+                )?,
                 "Test did not find the provided target directory interesting",
             );
             bar.finish_and_clear();
@@ -134,13 +137,7 @@ impl<'a, T: Test> Runner<'a, T> {
         let pass = self.passes.choose(&mut self.rng).unwrap().clone();
         let seed = self.rng.gen();
         let recent_success_rate = info.recent_success_rate;
-        let job = Job::new(
-            &self.workers[worker].workdir(),
-            relpath.clone(),
-            pass,
-            seed,
-            recent_success_rate,
-        )?;
+        let job = Job::new(relpath.clone(), pass, seed, recent_success_rate)?;
         self.workers[worker].submit(job)?;
         Ok(())
     }
@@ -154,7 +151,7 @@ impl<'a, T: Test> Runner<'a, T> {
                 false => self.wait_for_worker(None)?,
             };
             if let Some((worker, pass_status)) = worker {
-                did_reduce |= pass_status == JobStatus::Reduced;
+                did_reduce |= pass_status.did_reduce();
                 self.send_job_to(worker)?;
             }
             if did_reduce && std::time::Instant::now() >= next_snap {
@@ -200,24 +197,20 @@ impl<'a, T: Test> Runner<'a, T> {
                 .expect("Workers should never disconnect first")
             {
                 JobResult { job, res: Ok(res) } => {
-                    match res {
-                        JobStatus::Reduced => tracing::info!(
-                            "Job successfully reduced the input: {}",
-                            job.description,
-                        ),
+                    match &res {
+                        JobStatus::Reduced(desc) => {
+                            tracing::info!("Job successfully reduced the input: {desc}")
+                        }
                         JobStatus::DidNotReduce => (),
-                        JobStatus::PassFailed => {
-                            tracing::debug!("Job failed to handle the input: {}", job.description,)
+                        JobStatus::PassFailed(desc) => {
+                            tracing::debug!("Job failed to handle the input: {desc}")
                         }
                     }
-                    self.handle_result(w, job, res)?;
+                    self.handle_result(w, job, &res)?;
                     return Ok(Some((w, res)));
                 }
                 JobResult { job, res: Err(e) } => {
-                    tracing::error!(
-                        "Worker died while processing a job! Starting a new worker…\nJob: {}\nError:\n---\n{e:?}\n---",
-                        job.description,
-                    );
+                    tracing::error!("Worker died while processing a job! Starting a new worker…\nJob: {job:?}\nError:\n---\n{e:?}\n---");
                     let worker = self.workers.swap_remove(w);
                     self.spawn_worker(worker.kill())?;
                 }
@@ -225,9 +218,9 @@ impl<'a, T: Test> Runner<'a, T> {
         }
     }
 
-    fn handle_result(&mut self, worker: usize, job: Job, res: JobStatus) -> anyhow::Result<()> {
+    fn handle_result(&mut self, worker: usize, job: Job, res: &JobStatus) -> anyhow::Result<()> {
         match res {
-            JobStatus::Reduced => {
+            JobStatus::Reduced(_) => {
                 self.files.get_mut(&job.path).unwrap().record_success();
                 self.handle_reduction(worker, job)?;
             }
@@ -235,7 +228,7 @@ impl<'a, T: Test> Runner<'a, T> {
                 self.files.get_mut(&job.path).unwrap().record_fail();
             }
             // TODO: do something to avoid trying this pass again on the same file just after?
-            JobStatus::PassFailed => (),
+            JobStatus::PassFailed(_) => (),
         }
         Ok(())
     }

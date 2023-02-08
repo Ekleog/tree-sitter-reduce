@@ -22,7 +22,7 @@ pub(crate) struct Worker {
 
 struct WorkerThread<T> {
     rootdir: PathBuf,
-    test: Arc<T>,
+    test: T,
     receiver: crossbeam_channel::Receiver<Job>,
     sender: crossbeam_channel::Sender<JobResult>,
 }
@@ -45,9 +45,18 @@ impl Worker {
 
         // Finally, spawn a thread!
         std::thread::spawn({
+            let progress = progress.clone();
             let rootdir = rootdir.path().to_path_buf();
             let test = test.clone();
-            move || WorkerThread::new(rootdir, test, worker_receiver, worker_sender).run()
+            move || {
+                WorkerThread::new(
+                    rootdir,
+                    ReportingTest(test, progress),
+                    worker_receiver,
+                    worker_sender,
+                )
+                .run()
+            }
         });
         Ok(Worker {
             rootdir,
@@ -64,13 +73,6 @@ impl Worker {
     }
 
     pub(crate) fn submit(&self, j: Job) -> anyhow::Result<()> {
-        let workdir = self.workdir();
-        self.progress
-            .set_prefix(format!("#{:04x}", j.hash() % 0xFFFF));
-        self.progress
-            .set_message(j.explain(&workdir).with_context(|| {
-                format!("trying to use path {workdir:?} to describe job {j:?}")
-            })?);
         self.sender
             .try_send(j)
             .expect("Tried to send a job while the previous job was not done yet");
@@ -84,16 +86,12 @@ impl Worker {
     pub(crate) fn rootdir(&self) -> &Path {
         self.rootdir.path()
     }
-
-    pub(crate) fn workdir(&self) -> PathBuf {
-        self.rootdir().join(WORKDIR)
-    }
 }
 
 impl<T: Test> WorkerThread<T> {
     fn new(
         rootdir: PathBuf,
-        test: Arc<T>,
+        test: T,
         receiver: crossbeam_channel::Receiver<Job>,
         sender: crossbeam_channel::Sender<JobResult>,
     ) -> Self {
@@ -144,16 +142,10 @@ impl<T: Test> WorkerThread<T> {
 
         let res = job
             .pass
-            .reduce(
-                &workdir,
-                &*self.test,
-                &filepath,
-                job.seed,
-                job.recent_success_rate,
-            )
+            .reduce(&workdir, &self.test, &job)
             .with_context(|| format!("reducing with pass {job:?}"))?;
 
-        if res != JobStatus::Reduced {
+        if !res.did_reduce() {
             std::fs::copy(&tmpfilepath, &filepath).with_context(|| {
                 format!("restoring file {tmpfilepath:?} after failed pass {job:?}")
             })?;
@@ -163,5 +155,27 @@ impl<T: Test> WorkerThread<T> {
         })?;
 
         Ok(res)
+    }
+}
+
+struct ReportingTest<T>(Arc<T>, ProgressBar);
+
+impl<T: Test> Test for ReportingTest<T> {
+    fn test_interesting(
+        &self,
+        root: &Path,
+        attempt_name: &str,
+        attempt_id: u64,
+    ) -> anyhow::Result<bool> {
+        self.1.set_prefix(format!("#{:04x}", attempt_id % 0xFFFF));
+        self.1.set_message(String::from(attempt_name));
+        let res = self.0.test_interesting(root, attempt_name, attempt_id);
+        self.1
+            .set_message("Figuring out which pass to attempt next");
+        res
+    }
+
+    fn cleanup_snapshot(&self, root: &Path) -> anyhow::Result<()> {
+        self.0.cleanup_snapshot(root)
     }
 }

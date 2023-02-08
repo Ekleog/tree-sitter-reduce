@@ -4,7 +4,10 @@ use anyhow::Context;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand_distr::{Distribution, Exp1};
 
-use crate::{job::JobStatus, Pass, Test};
+use crate::{
+    job::{Job, JobStatus},
+    Pass, Test,
+};
 
 #[derive(Debug, Hash)]
 pub struct RemoveLines {
@@ -12,10 +15,6 @@ pub struct RemoveLines {
 }
 
 impl RemoveLines {
-    fn read_file(&self, path: &Path) -> anyhow::Result<String> {
-        std::fs::read_to_string(path).with_context(|| format!("reading file {path:?}"))
-    }
-
     fn what_to_delete(
         &self,
         file: &str,
@@ -38,18 +37,18 @@ impl RemoveLines {
 }
 
 impl Pass for RemoveLines {
-    fn reduce(
-        &self,
-        workdir: &Path,
-        test: &dyn Test,
-        path: &Path,
-        random_seed: u64,
-        recent_success_rate: u8,
-    ) -> anyhow::Result<JobStatus> {
-        let file = self.read_file(path)?;
-        let to_delete = match self.what_to_delete(&file, random_seed, recent_success_rate) {
+    fn reduce(&self, workdir: &Path, test: &dyn Test, job: &Job) -> anyhow::Result<JobStatus> {
+        let path = workdir.join(&job.path);
+        let file =
+            std::fs::read_to_string(&path).with_context(|| format!("reading file {path:?}"))?;
+
+        let to_delete = match self.what_to_delete(&file, job.random_seed, job.recent_success_rate) {
             Some(d) => d,
-            None => return Ok(JobStatus::PassFailed),
+            None => {
+                return Ok(JobStatus::PassFailed(String::from(
+                    "Cannot remove lines from an empty file",
+                )))
+            }
         };
 
         let mut new_data = String::with_capacity(file.len());
@@ -60,28 +59,16 @@ impl Pass for RemoveLines {
             }
         }
 
-        std::fs::write(path, new_data)
+        std::fs::write(&path, new_data)
             .with_context(|| format!("writing file {path:?} with reduced data"))?;
 
-        match test.test_interesting(workdir).context("running the test")? {
-            true => Ok(JobStatus::Reduced),
+        let attempt = format!("Remove lines {to_delete:?} of file {:?}", job.path);
+        match test
+            .test_interesting(workdir, &attempt, job.id(0))
+            .context("running the test")?
+        {
+            true => Ok(JobStatus::Reduced(attempt)),
             false => Ok(JobStatus::DidNotReduce),
         }
-        // TODO: actually use dichotomy here
-    }
-
-    fn explain(
-        &self,
-        workdir: &Path,
-        path: &Path,
-        random_seed: u64,
-        recent_success_rate: u8,
-    ) -> anyhow::Result<String> {
-        let to_delete = self.what_to_delete(
-            &self.read_file(&workdir.join(path))?,
-            random_seed,
-            recent_success_rate,
-        );
-        Ok(format!("Remove lines {to_delete:?} of file {path:?}"))
     }
 }

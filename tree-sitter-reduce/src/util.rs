@@ -42,6 +42,7 @@ pub(crate) fn copy_to_tempdir(root: &Path) -> anyhow::Result<TempDir> {
 pub(crate) fn init_env() -> anyhow::Result<indicatif::MultiProgress> {
     // Setup the progress bar
     let progress = indicatif::MultiProgress::new();
+    progress.set_move_cursor(true);
 
     // Setup tracing
     let format = tracing_subscriber::fmt::format().with_target(false);

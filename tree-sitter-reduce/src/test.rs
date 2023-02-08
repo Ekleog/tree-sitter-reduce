@@ -9,7 +9,15 @@ pub trait Test: 'static + Send + Sync {
     ///
     /// Note that if this returns `Err` then the current checkout will be considered
     /// broken and removed, so it should avoid doing so whenever possible.
-    fn test_interesting(&self, root: &Path) -> anyhow::Result<bool>;
+    ///
+    /// `attempt_name` is a human-readable message that describes what is being tried
+    /// by running this test. `attempt_id` is a hash of the same.
+    fn test_interesting(
+        &self,
+        root: &Path,
+        attempt_name: &str,
+        attempt_id: u64,
+    ) -> anyhow::Result<bool>;
 
     /// Cleanup a snapshot folder
     ///
@@ -79,7 +87,12 @@ where
     CleanFn: 'static + Send + Sync + Fn(&Path) -> anyhow::Result<()>,
     SnapCleanFn: 'static + Send + Sync + Fn(&Path) -> anyhow::Result<()>,
 {
-    fn test_interesting(&self, root: &Path) -> anyhow::Result<bool> {
+    fn test_interesting(
+        &self,
+        root: &Path,
+        _attempt_name: &str,
+        _attempt_id: u64,
+    ) -> anyhow::Result<bool> {
         (self.prep)(root)?;
         let res = std::process::Command::new(&self.test)
             .current_dir(root)

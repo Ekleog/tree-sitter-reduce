@@ -1,6 +1,9 @@
 use std::{collections::hash_map::DefaultHasher, fmt::Debug, hash::Hash, path::Path};
 
-use crate::{job::JobStatus, Test};
+use crate::{
+    job::{Job, JobStatus},
+    Test,
+};
 
 pub trait Pass: Debug + DynHash + Send + Sync {
     /// Edit the file at `path`, simplifying it
@@ -26,30 +29,7 @@ pub trait Pass: Debug + DynHash + Send + Sync {
     ///
     /// Also note that the pass is allowed to run the test multiple times, in order to
     /// implement things such as dichotomy.
-    // TODO: make the displayed message update depending on the current test attempt.
-    // This will also probably make it possible to remove the explain() function
-    // altogether, by adding all that uses it to the `test_interesting` function of the
-    // passed test.
-    // TODO: after that (because it'll simplify the API), pass in &Job instead of all the
-    // parameters here. But we need to remove Job::description first.
-    fn reduce(
-        &self,
-        workdir: &Path,
-        test: &dyn Test,
-        path: &Path,
-        random_seed: u64,
-        recent_success_rate: u8,
-    ) -> anyhow::Result<JobStatus>;
-
-    /// Display a human-readable version explaining what this pass actually did to
-    /// the file
-    fn explain(
-        &self,
-        workdir: &Path,
-        path_in_workdir: &Path,
-        random_seed: u64,
-        recent_success_rate: u8,
-    ) -> anyhow::Result<String>;
+    fn reduce(&self, workdir: &Path, test: &dyn Test, job: &Job) -> anyhow::Result<JobStatus>;
 }
 
 pub trait DynHash {

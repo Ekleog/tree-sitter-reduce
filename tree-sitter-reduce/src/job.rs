@@ -1,26 +1,43 @@
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
 };
 
 use crate::Pass;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum JobStatus {
-    Reduced,
+    /// Job did manage to reduce the input
+    ///
+    /// The `String` is a human-readable description of which changes the pass
+    /// ended up performing on the input to get to the reduced input.
+    Reduced(String),
     DidNotReduce,
-    PassFailed,
+
+    /// Job failed to apply to the input
+    ///
+    /// The `String` is a human-readable description of why the pass could not apply.
+    /// For example, `Could not remove functions in a file with no functions`.
+    PassFailed(String),
+}
+
+impl JobStatus {
+    pub fn did_reduce(&self) -> bool {
+        match self {
+            JobStatus::Reduced(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Job {
-    pub(crate) path: PathBuf,
+pub struct Job {
+    pub path: PathBuf,
     pub(crate) pass: Arc<dyn Pass>,
-    pub(crate) seed: u64,
-    pub(crate) recent_success_rate: u8,
-    pub(crate) description: String,
+    pub random_seed: u64,
+    pub recent_success_rate: u8,
 }
 
 pub(crate) struct JobResult {
@@ -29,33 +46,30 @@ pub(crate) struct JobResult {
 }
 
 impl Job {
-    pub fn new(
-        workdir: &Path,
+    pub(crate) fn new(
         path: PathBuf,
         pass: Arc<dyn Pass>,
-        seed: u64,
+        random_seed: u64,
         recent_success_rate: u8,
     ) -> anyhow::Result<Job> {
         Ok(Job {
-            description: pass.explain(&workdir, &path, seed, recent_success_rate)?,
             path,
             pass,
-            seed,
+            random_seed,
             recent_success_rate,
         })
     }
 
-    pub fn hash(&self) -> u64 {
+    /// Identifier of this job, supposed to be passed to `Test::test_interesting`
+    ///
+    /// The `attempt_number` is the number of the attempt for multi-attempt passes.
+    pub fn id(&self, attempt_number: usize) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.path.hash(&mut hasher);
         self.pass.dyn_hash(&mut hasher);
-        self.seed.hash(&mut hasher);
+        self.random_seed.hash(&mut hasher);
         self.recent_success_rate.hash(&mut hasher);
+        attempt_number.hash(&mut hasher);
         hasher.finish()
-    }
-
-    pub fn explain(&self, workdir: &Path) -> anyhow::Result<String> {
-        self.pass
-            .explain(workdir, &self.path, self.seed, self.recent_success_rate)
     }
 }

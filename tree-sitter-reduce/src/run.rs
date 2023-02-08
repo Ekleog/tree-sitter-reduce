@@ -44,13 +44,25 @@ pub struct Opt {
     /// which can be helpful for debugging the reducer itself.
     ///
     /// By default, snapshots will be taken every 10 seconds, which should be fine
-    /// for most use cases. But if you have little disk space, or try to minimize a
-    /// huge directory (eg. Rust with a `target/` directory if it is not removed on
-    /// snapshot), it could make sense to increase it.
+    /// for most use cases. But if you try to minimize a directory so huge that even
+    /// copying it to the snapshots folder slows reduction down, it could make sense
+    /// to increase it.
     // TODO: allow customization (and disabling) of cleanup command for rsreduce
     // TODO: add a max_snapshots parameter to limit the number of kept snapshots for very long runs
     #[structopt(long, default_value = "10")]
     snapshot_interval: u64,
+
+    /// Maximum number of snapshots to keep
+    ///
+    /// If disk space in the snapshot directory is a limited resource, you may want
+    /// to enable this option. Note that *IT MAY DELETE ANYTHING IN THE SNAPSHOTS
+    /// FOLDER*. So if you enable it, make sure there is nothing in the snapshots
+    /// directory before running!
+    // TODO: add ability to resume reducing from a snapshot... maybe we should just
+    // fail if the snapshots folder already contains data in it when started and the
+    // resume flag was not passed? then we can also default this to like 5.
+    #[structopt(long)]
+    max_snapshots: Option<usize>,
 
     /// Number of interestingness tests to run in parallel
     #[structopt(long, short, default_value = "4")]
@@ -135,6 +147,7 @@ pub fn run(
         passes,
         snap_dir,
         Duration::from_secs(opt.snapshot_interval),
+        opt.max_snapshots.unwrap_or(usize::MAX),
         rng,
         opt.jobs,
         progress,

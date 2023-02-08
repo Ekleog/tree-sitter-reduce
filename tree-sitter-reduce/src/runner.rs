@@ -50,6 +50,7 @@ pub(crate) struct Runner<'a, T> {
     passes: &'a [Arc<dyn Pass>],
     snap_dir: PathBuf,
     snap_interval: Duration,
+    max_snaps: usize,
     workers: Vec<Worker>,
     kill_trigger: crossbeam_channel::Receiver<()>,
     rng: StdRng,
@@ -65,6 +66,7 @@ impl<'a, T: Test> Runner<'a, T> {
         passes: &'a [Arc<dyn Pass>],
         snap_dir: PathBuf,
         snap_interval: Duration,
+        max_snaps: usize,
         rng: StdRng,
         jobs: usize,
         progress: indicatif::MultiProgress,
@@ -87,6 +89,7 @@ impl<'a, T: Test> Runner<'a, T> {
             passes,
             snap_dir,
             snap_interval,
+            max_snaps,
             workers: Vec::with_capacity(jobs),
             kill_trigger,
             rng,
@@ -314,7 +317,7 @@ impl<'a, T: Test> Runner<'a, T> {
             now.time.hour.number(),
             now.time.minute.number(),
             now.time.second.number(),
-            now.time.nanosecond.number() / 1_000_000
+            now.time.nanosecond.number() / 1_000_000,
         ));
         let workdir = self.root.path().join(WORKDIR);
         std::fs::create_dir(&snap_dir)
@@ -324,6 +327,27 @@ impl<'a, T: Test> Runner<'a, T> {
             .cleanup_snapshot(&snap_dir)
             .with_context(|| format!("cleaning up snapshot {snap_dir:?}"))?;
         tracing::info!("Wrote a reduced snapshot in {snap_dir:?}");
+        self.remove_old_snapshots()?;
+        tracing::trace!("Removed old snapshots from {:?}", self.snap_dir);
+        Ok(())
+    }
+
+    fn remove_old_snapshots(&self) -> anyhow::Result<()> {
+        let mut snapshots = std::fs::read_dir(&self.snap_dir)
+            .with_context(|| format!("listing snapshots in {:?}", self.snap_dir))?
+            .collect::<Result<Vec<_>, _>>()
+            .with_context(|| format!("listing snapshots in {:?}", self.snap_dir))?;
+        if snapshots.len() <= self.max_snaps {
+            return Ok(());
+        }
+        snapshots.sort_by_key(|s| s.file_name());
+        snapshots.truncate(snapshots.len() - self.max_snaps);
+        tracing::trace!("Too many snapshots, removing {snapshots:?}");
+        for s in snapshots {
+            let path = s.path();
+            std::fs::remove_dir_all(&path)
+                .with_context(|| format!("removing expired snapshot {path:?}"))?;
+        }
         Ok(())
     }
 }

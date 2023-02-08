@@ -1,4 +1,4 @@
-use std::{ops::Range, path::Path};
+use std::{collections::VecDeque, ops::Range, path::Path};
 
 use anyhow::Context;
 // TODO: actually use dichotomy here
@@ -22,26 +22,30 @@ impl DichotomyPass for RemoveLines {
         workdir: &Path,
         job: &Job,
         _kill_trigger: &crossbeam_channel::Receiver<()>,
-    ) -> anyhow::Result<(Self::Parsed, Vec<Self::Attempt>)> {
+    ) -> anyhow::Result<Option<(Self::Parsed, VecDeque<Self::Attempt>)>> {
         let path = workdir.join(&job.path);
         let file_contents =
-            std::fs::read_to_string(&path).with_context(|| format!("reading file {path:?}"))?;
+            std::fs::read(&path).with_context(|| format!("reading file {path:?}"))?;
+        let file_contents = match String::from_utf8(file_contents) {
+            Ok(r) => r,
+            Err(_) => return Ok(None),
+        };
 
         let mut rng = StdRng::seed_from_u64(job.random_seed);
         let num_lines = file_contents.lines().count();
         if num_lines == 0 {
-            return Ok((file_contents, Vec::new()));
+            return Ok(None);
         }
-        let mut res = Vec::with_capacity(num_lines.ilog2() as usize + 1);
+        let mut res = VecDeque::with_capacity(num_lines.ilog2() as usize + 1);
         let mut start_at = rng.gen_range(0..num_lines);
         let mut len = 1;
         while len < num_lines {
-            res.push(start_at..(start_at + len));
+            res.push_front(start_at..(start_at + len));
             start_at = start_at.saturating_sub(rng.gen_range(0..len));
             len += rng.gen_range(1..(2 * len));
         }
-        res.push(0..num_lines);
-        Ok((file_contents, res))
+        res.push_front(0..num_lines);
+        Ok(Some((file_contents, res)))
     }
 
     fn attempt_reduce(

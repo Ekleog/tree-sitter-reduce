@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 use structopt::StructOpt;
-use tree_sitter_reduce::{passes::RemoveLines, ShellTest};
+use tree_sitter_reduce::{passes::generic::RemoveLines, ShellTest};
 
 #[derive(Debug, structopt::StructOpt)]
 struct Opt {

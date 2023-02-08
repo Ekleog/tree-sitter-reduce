@@ -6,10 +6,9 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::{
     job::{Job, JobStatus},
+    passes::DichotomyPass,
     Test, TestResult,
 };
-
-use super::DichotomyPass;
 
 #[derive(Debug, Hash)]
 pub struct RemoveLines {

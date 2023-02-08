@@ -94,6 +94,7 @@ pub fn run(
     passes: &[Arc<dyn Pass>],
 ) -> anyhow::Result<()> {
     let progress = init_env(opt.no_progress_bars)?;
+    tracing::trace!("Received options {opt:#?}");
 
     // Handle the arguments
     let root = opt.canonicalized_root_path()?;

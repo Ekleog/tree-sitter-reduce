@@ -17,7 +17,15 @@ pub struct Opt {
     /// The interestingness test will be run in a copy this folder. Note that copies
     /// will happen only during the startup of this program. So the folder can be
     /// changed after the program confirms it's running.
-    root_path: PathBuf,
+    #[structopt(long, required_unless("resume"))]
+    root_path: Option<PathBuf>,
+
+    /// Resume from a previous reducer run
+    ///
+    /// This only works if there are already snapshots in the snapshot directory, ie.
+    /// a previous reducer run was interrupted.
+    #[structopt(long)]
+    resume: bool,
 
     /// If this option is passed, then only the file passed to it will be reduced
     ///
@@ -82,19 +90,39 @@ pub struct Opt {
 }
 
 impl Opt {
-    pub fn canonicalized_root_path(&mut self) -> anyhow::Result<PathBuf> {
-        self.root_path
-            .canonicalize()
-            .with_context(|| "canonicalizing root path {root:?}")
+    pub fn real_root_path(&mut self) -> anyhow::Result<PathBuf> {
+        if !self.resume {
+            let root = self
+                .root_path
+                .as_ref()
+                .expect("Structopt should not let root_path be None if resume was not set");
+            root.canonicalize()
+                .with_context(|| format!("canonicalizing root path {root:?}"))
+        } else {
+            let snap_dir = &self.snapshot_directory;
+            let mut snapshots = std::fs::read_dir(snap_dir)
+                .with_context(|| format!("listing snapshot directory {snap_dir:?}"))?
+                .collect::<Result<Vec<_>, _>>()
+                .with_context(|| format!("listing snapshot directory {snap_dir:?}"))?;
+            snapshots.sort_by_key(|s| s.file_name());
+            match snapshots.pop() {
+                None => anyhow::bail!("No snapshots found in snapshot directory {snap_dir:?}, but `--resume` was provided"),
+                Some(snapshot) => {
+                    let snap = snapshot.path();
+                    snap.canonicalize().with_context(|| format!("canonicalizing snapshot path {snap:?}"))
+                }
+            }
+        }
     }
 
     pub fn files(
         &self,
+        real_root_path: &Path,
         default_list: impl Fn(&Path) -> anyhow::Result<Vec<PathBuf>>,
     ) -> anyhow::Result<Vec<PathBuf>> {
         match &self.only_files {
             Some(r) => Ok(r.clone()),
-            None => default_list(&self.root_path),
+            None => default_list(&real_root_path),
         }
     }
 }
@@ -109,8 +137,8 @@ pub fn run(
     tracing::trace!("Received options {opt:#?}");
 
     // Handle the arguments
-    let root = opt.canonicalized_root_path()?;
-    let files = opt.files(filelist)?;
+    let root = opt.real_root_path()?;
+    let files = opt.files(&root, filelist)?;
     let files = files.into_iter().collect::<HashSet<PathBuf>>();
     let seed = opt.random_seed.unwrap_or_else(rand::random);
     let snap_dir = opt.snapshot_directory;
@@ -125,6 +153,14 @@ pub fn run(
         "Cannot find any file to reduce in {root:?}",
     );
     {
+        if !opt.resume {
+            if let Some(e) = std::fs::read_dir(&snap_dir)
+                .with_context(|| format!("listing snapshot directory {snap_dir:?}"))?
+                .next()
+            {
+                anyhow::bail!("Snapshot directory already has elements like {e:?}, but `--resume` was not passed");
+            }
+        }
         let testdir = snap_dir.join("test");
         std::fs::create_dir(&testdir).with_context(|| {
             format!("checking whether the snapshot directory {snap_dir:?} is writable")
@@ -135,6 +171,9 @@ pub fn run(
     if opt.snapshot_interval > 300 {
         tracing::warn!("You set snapshot interval to more than 5 minutes.");
         tracing::warn!("This usually slows down the time to receive the results, without getting anything in return");
+    }
+    if opt.resume && opt.root_path.is_some() {
+        tracing::warn!("You provided a root path but asked to resume. The root path will be ignored in favor of the latest snapshot");
     }
 
     // Actually run

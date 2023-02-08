@@ -98,7 +98,7 @@ impl<'a, T: Test> Runner<'a, T> {
         // Check that the provided test actually returns true on the initial input
         // TODO: Also clean up if killed here. This is before we spawn workers, so a bit
         // of refactoring will probably be needed.
-        tracing::info!("Finished copying target directory");
+        tracing::info!("Finished copying target directory {root:?}");
         if do_not_validate_input {
             tracing::warn!("Not validating the target directory. Note that validation does not usually make a reduction take significantly longer, but does avoid long useless waits due to malformed input.");
         } else {

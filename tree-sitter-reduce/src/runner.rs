@@ -276,7 +276,9 @@ impl<'a, T: Test> Runner<'a, T> {
         // Restart other workers so they actually take advantage of it
         tracing::trace!("Sending a kill message to all other workers");
         let mut workers_to_restart = self.workers.drain(..worker.0).collect::<Vec<_>>();
-        workers_to_restart.extend(self.workers.drain((worker.0 + 1)..));
+        if worker.0 < self.workers.len() - 1 {
+            workers_to_restart.extend(self.workers.drain((worker.0 + 1)..));
+        }
         for w in &workers_to_restart {
             w.send_kill();
         }

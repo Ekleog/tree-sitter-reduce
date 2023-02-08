@@ -245,6 +245,7 @@ impl<'a, T: Test> Runner<'a, T> {
 
     fn handle_reduction(&mut self, worker: usize, _job: Job) -> anyhow::Result<()> {
         // TODO: try to intelligently merge successful reductions? that's what _job would be for
+        // Retrieve the worker's successful reduction to "current best" state
         let my_dir = self.root.path();
         let my_workdir = my_dir.join(WORKDIR);
         let workerdir = self.workers[worker].rootdir();
@@ -258,6 +259,13 @@ impl<'a, T: Test> Runner<'a, T> {
         .with_context(|| {
             format!("copying successful reduction from {workerdir:?} to {my_dir:?}")
         })?;
+        // Restart other workers so they actually take advantage of it
+        let mut workers_to_restart = self.workers.drain(..worker).collect::<Vec<_>>();
+        workers_to_restart.extend(self.workers.drain((worker + 1)..));
+        for w in workers_to_restart {
+            self.spawn_worker(w.kill())
+                .context("restarting workers after one of them found a successful reduction")?;
+        }
         Ok(())
     }
 

@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
         list_files,
         test,
         // TODO: add more interesting passes
-        &[Arc::new(RemoveLines { average: 20 })],
+        &[Arc::new(RemoveLines)],
     )
 }
 

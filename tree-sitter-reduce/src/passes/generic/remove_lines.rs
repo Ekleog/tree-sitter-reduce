@@ -11,9 +11,7 @@ use crate::{
 };
 
 #[derive(Debug, Hash)]
-pub struct RemoveLines {
-    pub average: usize,
-}
+pub struct RemoveLines;
 
 impl DichotomyPass for RemoveLines {
     type Attempt = Range<usize>;

@@ -159,7 +159,7 @@ impl<T: Test> WorkerThread<T> {
             );
             self.sender
                 .try_send(res)
-                .expect("Main thread submitted a job before reading the previous result");
+                .expect("Main thread unable to receive job result");
         }
     }
 

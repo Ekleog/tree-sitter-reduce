@@ -55,6 +55,8 @@ pub(crate) struct Runner<'a, T> {
     rng: StdRng,
 }
 
+struct WorkerIdx(usize);
+
 impl<'a, T: Test> Runner<'a, T> {
     pub(crate) fn new(
         root: PathBuf,
@@ -95,7 +97,7 @@ impl<'a, T: Test> Runner<'a, T> {
         // of refactoring will probably be needed.
         tracing::info!("Finished copying target directory");
         if do_not_validate_input {
-            tracing::warn!("Not validating the target directory. Note that validation does not make a reduction take significantly longer, but does avoid long useless waits due to malformed input.");
+            tracing::warn!("Not validating the target directory. Note that validation does not usually make a reduction take significantly longer, but does avoid long useless waits due to malformed input.");
         } else {
             let bar = make_progress_bar();
             bar.enable_steady_tick(BAR_TICK_INTERVAL);
@@ -128,11 +130,11 @@ impl<'a, T: Test> Runner<'a, T> {
         let worker = Worker::new(self.root.path(), self.test.clone(), progress)
             .context("spinning up a worker")?;
         self.workers.push(worker);
-        self.send_job_to(self.workers.len() - 1)?;
+        self.send_job_to(WorkerIdx(self.workers.len() - 1))?;
         Ok(())
     }
 
-    fn send_job_to(&mut self, worker: usize) -> anyhow::Result<()> {
+    fn send_job_to(&mut self, worker: WorkerIdx) -> anyhow::Result<()> {
         let (relpath, info) = self
             .files
             .iter()
@@ -143,7 +145,7 @@ impl<'a, T: Test> Runner<'a, T> {
         let seed = self.rng.gen();
         let recent_success_rate = info.recent_success_rate;
         let job = Job::new(relpath.clone(), pass, seed, recent_success_rate)?;
-        self.workers[worker].submit(job)?;
+        self.workers[worker.0].submit(job)?;
         Ok(())
     }
 
@@ -174,7 +176,7 @@ impl<'a, T: Test> Runner<'a, T> {
     fn wait_for_worker(
         &mut self,
         deadline: Option<std::time::Instant>,
-    ) -> anyhow::Result<Option<(usize, JobStatus)>> {
+    ) -> anyhow::Result<Option<(WorkerIdx, JobStatus)>> {
         loop {
             // Find the first worker with a message
             let mut sel = crossbeam_channel::Select::new();
@@ -202,8 +204,9 @@ impl<'a, T: Test> Runner<'a, T> {
             }
 
             // If not, read its message and act upon it
+            let w = WorkerIdx(w);
             match oper
-                .recv(self.workers[w].get_receiver())
+                .recv(self.workers[w.0].get_receiver())
                 .expect("Workers should never disconnect first")
             {
                 JobResult { job, res: Ok(res) } => {
@@ -217,23 +220,31 @@ impl<'a, T: Test> Runner<'a, T> {
                         }
                         JobStatus::Interrupted => panic!("Got interrupted job result even though that should happen only after the runner itself is stopped"),
                     }
-                    self.handle_result(w, job, &res)?;
+                    let w = self.handle_result(w, job, &res)?;
                     return Ok(Some((w, res)));
                 }
                 JobResult { job, res: Err(e) } => {
                     tracing::error!("Worker died while processing a job! Starting a new worker…\nJob: {job:?}\nError:\n---\n{e:?}\n---");
-                    let worker = self.workers.swap_remove(w);
+                    let worker = self.workers.swap_remove(w.0);
                     self.spawn_worker(worker.recover_bar())?;
                 }
             }
         }
     }
 
-    fn handle_result(&mut self, worker: usize, job: Job, res: &JobStatus) -> anyhow::Result<()> {
+    /// Note that while handling the result, the worker order can change
+    ///
+    /// So this returns the new WorkerIdx for `worker`.
+    fn handle_result(
+        &mut self,
+        worker: WorkerIdx,
+        job: Job,
+        res: &JobStatus,
+    ) -> anyhow::Result<WorkerIdx> {
         match res {
             JobStatus::Reduced(_) => {
                 self.files.get_mut(&job.path).unwrap().record_success();
-                self.handle_reduction(worker, job)?;
+                return self.handle_reduction(worker, job);
             }
             JobStatus::DidNotReduce => {
                 self.files.get_mut(&job.path).unwrap().record_fail();
@@ -242,15 +253,16 @@ impl<'a, T: Test> Runner<'a, T> {
             JobStatus::PassFailed(_) => (),
             JobStatus::Interrupted => panic!("Got interrupted job result even though that should happen only after the runner itself is stopped"),
         }
-        Ok(())
+        Ok(worker)
     }
 
-    fn handle_reduction(&mut self, worker: usize, _job: Job) -> anyhow::Result<()> {
+    fn handle_reduction(&mut self, worker: WorkerIdx, _job: Job) -> anyhow::Result<WorkerIdx> {
         // TODO: try to intelligently merge successful reductions? that's what _job would be for
+        tracing::trace!("Handling reduction");
         // Retrieve the worker's successful reduction to "current best" state
         let my_dir = self.root.path();
         let my_workdir = my_dir.join(WORKDIR);
-        let workerdir = self.workers[worker].rootdir();
+        let workerdir = self.workers[worker.0].rootdir();
         std::fs::remove_dir_all(&my_workdir)
             .with_context(|| format!("removing \"current status\" path {my_workdir:?}"))?;
         fs_extra::dir::copy(
@@ -262,11 +274,13 @@ impl<'a, T: Test> Runner<'a, T> {
             format!("copying successful reduction from {workerdir:?} to {my_dir:?}")
         })?;
         // Restart other workers so they actually take advantage of it
-        let mut workers_to_restart = self.workers.drain(..worker).collect::<Vec<_>>();
-        workers_to_restart.extend(self.workers.drain((worker + 1)..));
+        tracing::trace!("Sending a kill message to all other workers");
+        let mut workers_to_restart = self.workers.drain(..worker.0).collect::<Vec<_>>();
+        workers_to_restart.extend(self.workers.drain((worker.0 + 1)..));
         for w in &workers_to_restart {
             w.send_kill();
         }
+        tracing::trace!("Waiting for all other workers to reply to the kill message");
         while !workers_to_restart.is_empty() {
             let mut sel = crossbeam_channel::Select::new();
             for w in workers_to_restart.iter() {
@@ -283,7 +297,8 @@ impl<'a, T: Test> Runner<'a, T> {
             self.spawn_worker(worker.recover_bar())
                 .context("restarting workers after one of them found a successful reduction")?;
         }
-        Ok(())
+        tracing::trace!("All workers replied to the kill message and were restarted");
+        Ok(WorkerIdx(0)) // We removed all workers then respawned new ones
     }
 
     fn snapshot(&self) -> anyhow::Result<()> {

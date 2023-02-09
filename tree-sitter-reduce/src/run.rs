@@ -62,15 +62,13 @@ pub struct Opt {
 
     /// Maximum number of snapshots to keep
     ///
-    /// If disk space in the snapshot directory is a limited resource, you may want
-    /// to enable this option. Note that *IT MAY DELETE ANYTHING IN THE SNAPSHOTS
-    /// FOLDER*. So if you enable it, make sure there is nothing in the snapshots
-    /// directory before running!
-    // TODO: add ability to resume reducing from a snapshot... maybe we should just
-    // fail if the snapshots folder already contains data in it when started and the
-    // resume flag was not passed? then we can also default this to like 5.
-    #[structopt(long)]
-    max_snapshots: Option<usize>,
+    /// By default, 10 snapshots will be kept. Note that you should not add
+    /// non-snapshots to this folder! The reducer checks when starting that the
+    /// folder does look empty, but if you manually add root things to the snapshots
+    /// directory, it could lead to snapshots never being recorded, or to these
+    /// things being deleted.
+    #[structopt(long, default_value = "10")]
+    max_snapshots: usize,
 
     /// Number of interestingness tests to run in parallel
     #[structopt(long, short, default_value = "4")]
@@ -189,7 +187,7 @@ pub fn run(
         passes,
         snap_dir,
         Duration::from_secs(opt.snapshot_interval),
-        opt.max_snapshots.unwrap_or(usize::MAX),
+        opt.max_snapshots,
         rng,
         opt.jobs,
         progress,

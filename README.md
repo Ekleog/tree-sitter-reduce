@@ -4,6 +4,8 @@
 
 In particular, `rsreduce` can currently be used to reduce full Rust crates, and [only requires minimal code](./rsreduce/src/main.rs).
 
+If you are currently trying to reduce a big example in a not-yet-supported language, if you already some Rust chances are it would be faster to implement the necessary language-specific support then run `tree-sitter-reduce` than to minimize the example directly.
+
 ## Example usage: `rsreduce`
 
 The first step when using `rsreduce` is to prepare a test driver, similar to `creduce` operation. Basically, you need to create a binary that, when run at the root of your crate and not depending on anything outside it, returns `0` if the bug reproduced and anything else if it did not. A typical example would be:

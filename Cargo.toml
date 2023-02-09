@@ -17,6 +17,7 @@ structopt = "0.3.26"
 tempfile = "3.3"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+tree-sitter = "0.20.9"
 tree-sitter-reduce = { path = "./tree-sitter-reduce" }
 walkdir = "2.3"
 

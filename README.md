@@ -29,3 +29,5 @@ If you ever want to change some configuration, improve on your test runner, or j
 By default, `rsreduce` writes at most one snapshot every 10 seconds, and keeps at most 10 of them, so if you want to investigate the current status while it is running you have at least 100 seconds to copy the snapshot and check it out. `rsreduce` does not read snapshots (except when resuming), so feel free to edit them. Also, `rsreduce` does not rely on the root path given to it staying constant, so you can continue development after spinning up an `rsreduce` instance.
 
 See `rsreduce --help` for all the details about available command line options.
+
+Huge kudos to [the awesome {pnk}f(eli)x blog post](https://blog.pnkfx.org/blog/2019/11/18/rust-bug-minimization-patterns/), on which most of the Rust passes are based.

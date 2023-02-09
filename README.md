@@ -1,10 +1,10 @@
 # tree-sitter-reduce
 
-`tree-sitter-reduce` is a `creduce` that attempts to work well in a format easily adjusted to any tree-sitter grammar.
+`tree-sitter-reduce` is a library to build `creduce`-like binaries, in a way that attempts to make it really easy for any language that has a tree-sitter grammar.
 
-In particular, `rsreduce` can currently be used, and [only requires minimal code](./rsreduce/src/main.rs).
+In particular, `rsreduce` can currently be used to reduce full Rust crates, and [only requires minimal code](./rsreduce/src/main.rs).
 
-## Example usage
+## Example usage: `rsreduce`
 
 The first step when using `rsreduce` is to prepare a test driver, similar to `creduce` operation. Basically, you need to create a binary that, when run at the root of your crate and not depending on anything outside it, returns `0` if the bug reproduced and anything else if it did not. A typical example would be:
 ```bash

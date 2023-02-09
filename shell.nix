@@ -9,6 +9,7 @@ pkgs.stdenv.mkDerivation {
       cargo-nextest
       cargo-udeps
       niv
+      tree-sitter
 
       (fenix.combine (with fenix; [
         complete.cargo

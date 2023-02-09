@@ -53,6 +53,14 @@ fn main() -> anyhow::Result<()> {
                 replace_with: b"{loop{}}".to_vec(),
                 try_match_all_nodes: false,
             }),
+            // TODO: Defaultify, like Loopify but generates {Default::default()}
+            // TODO: Remove "obviously removable" nodes: comments, `pub` token, whole-item (`fn`/`impl`/etc)...
+            // TODO: Add default function to all defined traits, can help removing whole-traits
+            // TODO: Replace type with `impl Sized`
+            // TODO: Replace match branches with a default branch (that loops)
+            // TODO: Figure out a way to use LSP to delete all unused things?
+            // TODO: Try to figure out more things from [1] that could be automated
+            // [1] https://blog.pnkfx.org/blog/2019/11/18/rust-bug-minimization-patterns/
         ],
     )
 }

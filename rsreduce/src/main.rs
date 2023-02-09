@@ -38,19 +38,35 @@ fn main() -> anyhow::Result<()> {
         opt.other_opts,
         list_files,
         test,
-        // TODO: add more interesting passes
-        &[Arc::new(TreeSitterReplace {
-            name: String::from("Remove random nodes"),
-            language: tree_sitter_rust::language(),
-            node_matcher: match_any_good_node,
-            replace_with: Vec::new(),
-            try_match_all_nodes: false,
-        })],
+        &[
+            Arc::new(TreeSitterReplace {
+                name: String::from("Remove random nodes"),
+                language: tree_sitter_rust::language(),
+                node_matcher: match_any_good_node,
+                replace_with: Vec::new(),
+                try_match_all_nodes: false,
+            }),
+            Arc::new(TreeSitterReplace {
+                language: tree_sitter_rust::language(),
+                name: String::from("Loopify"),
+                node_matcher: match_loopifiable,
+                replace_with: b"{loop{}}".to_vec(),
+                try_match_all_nodes: false,
+            }),
+        ],
     )
 }
 
 fn match_any_good_node(_input: &[u8], node: &tree_sitter::Node) -> bool {
     node.is_named()
+}
+
+fn match_loopifiable(_input: &[u8], node: &tree_sitter::Node) -> bool {
+    match node.kind() {
+        "block" => true,
+        k if k.ends_with("_expression") => true,
+        _ => false,
+    }
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

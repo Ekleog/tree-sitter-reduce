@@ -7,5 +7,7 @@ edition = "2021"
 anyhow.workspace = true
 structopt.workspace = true
 tracing.workspace = true
+tree-sitter.workspace = true
 tree-sitter-reduce.workspace = true
+tree-sitter-rust.workspace = true
 walkdir.workspace = true

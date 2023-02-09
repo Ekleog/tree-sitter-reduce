@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 use structopt::StructOpt;
-use tree_sitter_reduce::{passes::generic::RemoveLines, ShellTest};
+use tree_sitter_reduce::{passes::generic::TreeSitterReplace, ShellTest};
 
 #[derive(Debug, structopt::StructOpt)]
 struct Opt {
@@ -39,8 +39,18 @@ fn main() -> anyhow::Result<()> {
         list_files,
         test,
         // TODO: add more interesting passes
-        &[Arc::new(RemoveLines)],
+        &[Arc::new(TreeSitterReplace {
+            name: String::from("Remove random nodes"),
+            language: tree_sitter_rust::language(),
+            node_matcher: match_any_node,
+            replace_with: Vec::new(),
+            try_match_all_nodes: false,
+        })],
     )
+}
+
+fn match_any_node(_input: &[u8], _node: &tree_sitter::Node) -> bool {
+    true
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

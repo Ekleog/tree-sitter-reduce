@@ -19,8 +19,11 @@ tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tree-sitter = "0.20.9"
 tree-sitter-reduce = { path = "./tree-sitter-reduce" }
+tree-sitter-rust = "0.20.3"
 walkdir = "2.3"
 
 [patch.crates-io]
 # See https://github.com/console-rs/indicatif/pull/518
 indicatif = { git = "https://github.com/Ekleog/indicatif", rev = "025a566b861ed953e340e74f3008121a9b721ee3" }
+# See https://github.com/tree-sitter/tree-sitter/pull/2080
+tree-sitter = { git = "https://github.com/Ekleog/tree-sitter", rev = "3964651fc69cdf4ac060751464268fad41aca421" }

@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, ops::Range};
+use std::{collections::VecDeque, fmt::Debug, ops::Range, hash::Hash};
 
 use anyhow::Context;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -9,6 +9,9 @@ use crate::{passes::DichotomyPass, JobStatus, TestResult};
 pub struct TreeSitterReplace<F> {
     /// Language to parse the input as
     pub language: tree_sitter::Language,
+
+    /// Human-readable name of this pass
+    pub name: String,
 
     /// Node matcher
     ///
@@ -41,6 +44,28 @@ pub struct TreeSitterReplace<F> {
     /// when coupled with other passes this pass could still lead to unchecked
     /// input growth (eg. a pass doing A -> BB and a pass doing B -> AA)
     pub try_match_all_nodes: bool,
+}
+
+impl<F> Debug for TreeSitterReplace<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TreeSitterReplace")
+            .field("language", &self.language)
+            .field("name", &self.name)
+            .field("node_matcher", &"[closure]")
+            .field("replace_with", &self.replace_with)
+            .field("try_match_all_nodes", &self.try_match_all_nodes)
+            .finish()
+    }
+}
+
+impl<F> Hash for TreeSitterReplace<F> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.language.hash(state);
+        self.name.hash(state);
+        // self.node_matcher.hash(state);
+        self.replace_with.hash(state);
+        self.try_match_all_nodes.hash(state);
+    }
 }
 
 #[derive(Clone)]
@@ -240,8 +265,8 @@ where
             .with_context(|| format!("writing file {path:?} with reduced data"))?;
 
         let attempt = format!(
-            "Replacing {removed_size}B with {replacement_size}B of {:?} (ranges {attempt:?})",
-            String::from_utf8_lossy(&self.replace_with),
+            "{}: Replacing {removed_size}B with {replacement_size}B (ranges {attempt:?})",
+            self.name,
         );
 
         match test

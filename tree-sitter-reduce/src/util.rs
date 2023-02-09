@@ -18,7 +18,7 @@ pub(crate) fn copy_dir_contents(from: &Path, to: &Path) -> anyhow::Result<()> {
 
 pub(crate) fn clone_tempdir(root: &Path) -> anyhow::Result<TempDir> {
     let dir = tempfile::Builder::new()
-        .prefix("tree-sitter-reduce-")
+        .prefix("tree-sitter-reduce-worker-")
         .tempdir()
         .context("creating temporary directory")?;
     copy_dir_contents(root, dir.path())?;
@@ -27,7 +27,7 @@ pub(crate) fn clone_tempdir(root: &Path) -> anyhow::Result<TempDir> {
 
 pub(crate) fn copy_to_tempdir(root: &Path) -> anyhow::Result<TempDir> {
     let dir = tempfile::Builder::new()
-        .prefix("tree-sitter-reduce-")
+        .prefix("tree-sitter-reduce-runner-")
         .tempdir()
         .context("creating temporary directory")?;
     let actual_path = dir.path().join(WORKDIR);

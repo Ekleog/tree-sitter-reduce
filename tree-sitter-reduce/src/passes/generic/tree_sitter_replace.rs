@@ -249,7 +249,7 @@ where
         let mut aim_at_bytes = interesting.count_bytes();
         let mut cur_bytes = aim_at_bytes;
         attempts.push_back(interesting);
-        loop {
+        'finished: loop {
             let mut attempt = attempts[attempts.len() - 1].clone();
             aim_at_bytes /= 2;
             if aim_at_bytes == 0 {
@@ -274,6 +274,9 @@ where
                     cur_bytes,
                     "`cur_bytes` cache diverged from real value: {cur_bytes} for {attempt:?}"
                 );
+                if cur_bytes == 0 {
+                    break 'finished;
+                }
             }
             assert_eq!(
                 attempt.count_bytes(),

@@ -25,3 +25,5 @@ Your test driver will then be run in a loop in copies of the folder you want to 
 If you ever want to change some configuration, improve on your test runner, or just turn off your machine for a while, you can resume an interrupted run by replacing `--root-path [path]` with `--resume`. Then, `rsreduce` will resume reduction from the most recent snapshot in the snapshot directory.
 
 By default, `rsreduce` writes at most one snapshot every 10 seconds, and keeps at most 10 of them, so if you want to investigate the current status while it is running you have at least 100 seconds to copy the snapshot and check it out. `rsreduce` does not read snapshots (except when resuming), so feel free to edit them. Also, `rsreduce` does not rely on the root path given to it staying constant, so you can continue development after spinning up an `rsreduce` instance.
+
+See `rsreduce --help` for all the details about available command line options.

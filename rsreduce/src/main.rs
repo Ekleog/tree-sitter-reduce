@@ -40,8 +40,8 @@ fn main() -> anyhow::Result<()> {
         test,
         &[
             Arc::new(TreeSitterReplace {
-                name: String::from("Remove random nodes"),
                 language: tree_sitter_rust::language(),
+                name: String::from("Remove random nodes"),
                 node_matcher: match_any_good_node,
                 replace_with: Vec::new(),
                 try_match_all_nodes: false,
@@ -53,8 +53,28 @@ fn main() -> anyhow::Result<()> {
                 replace_with: b"{loop{}}".to_vec(),
                 try_match_all_nodes: false,
             }),
+            Arc::new(TreeSitterReplace {
+                language: tree_sitter_rust::language(),
+                name: String::from("Depublify"),
+                node_matcher: match_pub,
+                replace_with: Vec::new(),
+                try_match_all_nodes: false,
+            }),
+            Arc::new(TreeSitterReplace {
+                language: tree_sitter_rust::language(),
+                name: String::from("Decommentify"),
+                node_matcher: match_comment,
+                replace_with: Vec::new(),
+                try_match_all_nodes: false,
+            }),
+            Arc::new(TreeSitterReplace {
+                language: tree_sitter_rust::language(),
+                name: String::from("Remove items"),
+                node_matcher: match_items,
+                replace_with: Vec::new(),
+                try_match_all_nodes: false,
+            }),
             // TODO: Defaultify, like Loopify but generates {Default::default()}
-            // TODO: Remove "obviously removable" nodes: comments, `pub` token, whole-item (`fn`/`impl`/etc)...
             // TODO: Add default function to all defined traits, can help removing whole-traits
             // TODO: Replace type with `impl Sized`
             // TODO: Replace match branches with a default branch (that loops)
@@ -75,6 +95,18 @@ fn match_loopifiable(_input: &[u8], node: &tree_sitter::Node) -> bool {
         k if k.ends_with("_expression") => true,
         _ => false,
     }
+}
+
+fn match_pub(_input: &[u8], node: &tree_sitter::Node) -> bool {
+    node.kind() == "visibility_modifier"
+}
+
+fn match_comment(_input: &[u8], node: &tree_sitter::Node) -> bool {
+    node.kind().ends_with("_comment")
+}
+
+fn match_items(_input: &[u8], node: &tree_sitter::Node) -> bool {
+    node.kind().ends_with("_item")
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

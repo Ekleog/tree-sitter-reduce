@@ -71,6 +71,10 @@ pub struct Opt {
     max_snapshots: usize,
 
     /// Number of interestingness tests to run in parallel
+    ///
+    /// If your test case is highly parallel, then reducing that number may make
+    /// reduction go faster, as it will run only one test at once and thus lose less
+    /// valid reductions due to two workers finding a reduction at once.
     #[structopt(long, short, default_value = "4")]
     jobs: usize,
 

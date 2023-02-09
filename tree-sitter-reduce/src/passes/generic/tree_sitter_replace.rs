@@ -86,7 +86,26 @@ impl InterestingNodeList {
         self.0.into_iter().map(|n| n.bytes).collect()
     }
 
+    fn check_sorted(&self) -> bool {
+        let mut cur = 0;
+        for n in self.0.iter() {
+            if cur > n.bytes.start {
+                return false;
+            }
+            if n.bytes.start > n.bytes.end {
+                return false;
+            }
+            cur = n.bytes.end;
+        }
+        true
+    }
+
     fn try_remove_front(&mut self, mut size_to_remove: usize) -> usize {
+        debug_assert!(
+            self.check_sorted(),
+            "Was unsorted before try_remove_front: {:?}",
+            self.0
+        );
         let mut removed = 0;
         loop {
             if self.0.is_empty() {
@@ -106,10 +125,20 @@ impl InterestingNodeList {
         removed += remaining_children.try_remove_front(size_to_remove);
         remaining_children.0.append(&mut self.0);
         self.0 = remaining_children.0;
+        debug_assert!(
+            self.check_sorted(),
+            "`try_remove_front` unsorted list {:?}",
+            self.0
+        );
         removed
     }
 
     fn try_remove_back(&mut self, mut size_to_remove: usize) -> usize {
+        debug_assert!(
+            self.check_sorted(),
+            "Was unsorted before try_remove_back: {:?}",
+            self.0
+        );
         let mut removed = 0;
         loop {
             if self.0.is_empty() {
@@ -123,11 +152,16 @@ impl InterestingNodeList {
             size_to_remove -= item_size;
             self.0.pop_back();
         }
-        let item = self.0.pop_front().unwrap();
+        let item = self.0.pop_back().unwrap();
         removed += item.bytes.len() - item.children.count_bytes();
         let mut remaining_children = item.children;
-        removed += remaining_children.try_remove_front(size_to_remove);
+        removed += remaining_children.try_remove_back(size_to_remove);
         self.0.append(&mut remaining_children.0);
+        debug_assert!(
+            self.check_sorted(),
+            "`try_remove_back` unsorted list {:?}",
+            self.0
+        );
         removed
     }
 }
@@ -264,6 +298,10 @@ where
         kill_trigger: &crossbeam_channel::Receiver<()>,
     ) -> anyhow::Result<crate::JobStatus> {
         let path = workdir.join(&job.path);
+        tracing::trace!(
+            "Attempting to replace ranges {attempt:?} with {:?} on {path:?}",
+            std::str::from_utf8(&self.replace_with),
+        );
 
         let removed_size = attempt.iter().map(Range::len).sum::<usize>();
         let replacement_size = attempt.len() * self.replace_with.len();

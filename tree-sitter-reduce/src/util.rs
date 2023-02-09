@@ -79,6 +79,8 @@ pub(crate) fn make_progress_bar() -> indicatif::ProgressBar {
     ]);
     let bar = indicatif::ProgressBar::new_spinner();
     bar.set_style(progress_style);
+    bar.set_prefix("#0000");
+    bar.set_message("Figuring out which pass to attempt next");
     bar
 }
 

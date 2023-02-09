@@ -255,6 +255,7 @@ where
             if aim_at_bytes == 0 {
                 break;
             }
+            let mut removed_this_round = 0;
             while aim_at_bytes * 4 / 3 < cur_bytes {
                 // allow slightly-too-big-for-dichotomy node sets, as we can't be precise
                 // with what's being removed exactly
@@ -267,6 +268,7 @@ where
                 };
                 assert!(actually_removed != 0, "Tried removing {try_remove_now}B but failed to remove a single one! Current attempt is {attempt:?}");
                 cur_bytes -= actually_removed;
+                removed_this_round += actually_removed;
                 debug_assert_eq!(
                     attempt.count_bytes(),
                     cur_bytes,
@@ -278,7 +280,9 @@ where
                 cur_bytes,
                 "`cur_bytes` cache diverged from real value"
             );
-            attempts.push_back(attempt);
+            if removed_this_round > 0 && cur_bytes > 0 {
+                attempts.push_back(attempt);
+            }
         }
 
         Ok(Some((

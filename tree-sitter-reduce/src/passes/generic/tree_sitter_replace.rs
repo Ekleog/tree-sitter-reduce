@@ -305,10 +305,6 @@ where
         kill_trigger: &crossbeam_channel::Receiver<()>,
     ) -> anyhow::Result<crate::JobStatus> {
         let path = workdir.join(&job.path);
-        tracing::trace!(
-            "Attempting to replace ranges {attempt:?} with {:?} on {path:?}",
-            std::str::from_utf8(&self.replace_with),
-        );
 
         let removed_size = attempt.iter().map(Range::len).sum::<usize>();
         let replacement_size = attempt.len() * self.replace_with.len();

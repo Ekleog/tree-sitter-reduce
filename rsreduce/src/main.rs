@@ -42,15 +42,15 @@ fn main() -> anyhow::Result<()> {
         &[Arc::new(TreeSitterReplace {
             name: String::from("Remove random nodes"),
             language: tree_sitter_rust::language(),
-            node_matcher: match_any_node,
+            node_matcher: match_any_good_node,
             replace_with: Vec::new(),
             try_match_all_nodes: false,
         })],
     )
 }
 
-fn match_any_node(_input: &[u8], _node: &tree_sitter::Node) -> bool {
-    true
+fn match_any_good_node(_input: &[u8], node: &tree_sitter::Node) -> bool {
+    node.is_named()
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

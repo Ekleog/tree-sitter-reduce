@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, fmt::Debug, ops::Range, hash::Hash};
+use std::{collections::VecDeque, fmt::Debug, hash::Hash, ops::Range};
 
 use anyhow::Context;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -68,13 +68,13 @@ impl<F> Hash for TreeSitterReplace<F> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct InterestingNode {
     bytes: Range<usize>,
     children: InterestingNodeList,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct InterestingNodeList(VecDeque<Box<InterestingNode>>);
 
 impl InterestingNodeList {
@@ -100,7 +100,9 @@ impl InterestingNodeList {
             size_to_remove -= item_size;
             self.0.pop_front();
         }
-        let mut remaining_children = self.0.pop_front().unwrap().children;
+        let item = self.0.pop_front().unwrap();
+        removed += item.bytes.len() - item.children.count_bytes();
+        let mut remaining_children = item.children;
         removed += remaining_children.try_remove_front(size_to_remove);
         remaining_children.0.append(&mut self.0);
         self.0 = remaining_children.0;
@@ -121,7 +123,9 @@ impl InterestingNodeList {
             size_to_remove -= item_size;
             self.0.pop_back();
         }
-        let mut remaining_children = self.0.pop_back().unwrap().children;
+        let item = self.0.pop_front().unwrap();
+        removed += item.bytes.len() - item.children.count_bytes();
+        let mut remaining_children = item.children;
         removed += remaining_children.try_remove_front(size_to_remove);
         self.0.append(&mut remaining_children.0);
         removed
@@ -220,13 +224,26 @@ where
             while aim_at_bytes * 4 / 3 < cur_bytes {
                 // allow slightly-too-big-for-dichotomy node sets, as we can't be precise
                 // with what's being removed exactly
-                let try_remove_now = rng.gen_range(1..(cur_bytes - aim_at_bytes));
+                let total_to_remove = cur_bytes - aim_at_bytes;
+                let try_remove_now =
+                    rng.gen_range(((total_to_remove + 1) / 2)..(total_to_remove + 1));
                 let actually_removed = match rng.gen::<bool>() {
                     true => attempt.try_remove_front(try_remove_now),
                     false => attempt.try_remove_back(try_remove_now),
                 };
+                assert!(actually_removed != 0, "Tried removing {try_remove_now}B but failed to remove a single one! Current attempt is {attempt:?}");
                 cur_bytes -= actually_removed;
+                debug_assert_eq!(
+                    attempt.count_bytes(),
+                    cur_bytes,
+                    "`cur_bytes` cache diverged from real value: {cur_bytes} for {attempt:?}"
+                );
             }
+            assert_eq!(
+                attempt.count_bytes(),
+                cur_bytes,
+                "`cur_bytes` cache diverged from real value"
+            );
             attempts.push_back(attempt);
         }
 

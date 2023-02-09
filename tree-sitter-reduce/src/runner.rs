@@ -218,7 +218,7 @@ impl<'a, T: Test> Runner<'a, T> {
                             tracing::info!("Job successfully reduced the input: {desc}")
                         }
                         JobStatus::DidNotReduce => {
-                            tracing::trace!("Job did not reduce the input: {job:?}")
+                            tracing::trace!("Job did not reduce the input: {:?} {:?}", job.pass, job.path)
                         }
                         JobStatus::PassFailed(desc) => {
                             tracing::debug!("Job failed to handle the input: {desc}")

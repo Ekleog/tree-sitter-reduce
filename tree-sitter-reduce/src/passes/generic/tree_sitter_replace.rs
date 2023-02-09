@@ -48,13 +48,7 @@ pub struct TreeSitterReplace<F> {
 
 impl<F> Debug for TreeSitterReplace<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TreeSitterReplace")
-            .field("language", &self.language)
-            .field("name", &self.name)
-            .field("node_matcher", &"[closure]")
-            .field("replace_with", &self.replace_with)
-            .field("try_match_all_nodes", &self.try_match_all_nodes)
-            .finish()
+        write!(f, "Tree-Sitter: {}", self.name)
     }
 }
 

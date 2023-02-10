@@ -91,9 +91,24 @@ fn main() -> anyhow::Result<()> {
                 },
                 try_match_all_nodes: false,
             }),
+            Arc::new(TreeSitterReplace {
+                language: tree_sitter_rust::language(),
+                name: String::from("Add default methods to function signatures"),
+                node_matcher: |i, n| {
+                    if n.kind() != "function_signature_item" {
+                        return None;
+                    }
+                    let signature = &i[n.byte_range()];
+                    let mut signature = match signature.iter().rposition(|&b| b == b';') {
+                        None => return None,
+                        Some(i) => Vec::from(&signature[..i]),
+                    };
+                    signature.extend_from_slice(b"{loop{}}");
+                    Some(signature)
+                },
+                try_match_all_nodes: false,
+            }),
             // TODO: Defaultify, like Loopify but generates {Default::default()}
-            // TODO: Add default function to all defined traits, can help removing whole-traits
-            // TODO: Replace type with `impl Sized`
             // TODO: Replace match branches with a default branch (that loops)
             // TODO: Figure out a way to use LSP to delete all unused things?
             // TODO: Try to figure out more things from [1] that could be automated

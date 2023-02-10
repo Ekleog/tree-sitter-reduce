@@ -297,6 +297,7 @@ impl<'a, T: Test> Runner<'a, T> {
             let oper = sel.select();
             let w = oper.index();
             if w == workers_to_restart.len() {
+                let _ = oper.recv(&self.kill_trigger);
                 anyhow::bail!("Killed by user");
             }
             let _ = oper.recv(workers_to_restart[w].get_receiver());

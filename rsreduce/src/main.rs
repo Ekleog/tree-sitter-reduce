@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Remove random nodes"),
-                node_matcher: match_any_good_node,
+                node_matcher: |_, n| n.is_named(),
                 replace_with: Vec::new(),
                 try_match_all_nodes: false,
             }),
@@ -56,22 +56,29 @@ fn main() -> anyhow::Result<()> {
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Depublify"),
-                node_matcher: match_pub,
+                node_matcher: |_, n| n.kind() == "visibility_modifier",
                 replace_with: Vec::new(),
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Decommentify"),
-                node_matcher: match_comment,
+                node_matcher: |_, n| n.kind().ends_with("_comment"),
                 replace_with: Vec::new(),
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Remove items"),
-                node_matcher: match_items,
+                node_matcher: |_, n| n.kind().ends_with("_item"),
                 replace_with: Vec::new(),
+                try_match_all_nodes: false,
+            }),
+            Arc::new(TreeSitterReplace {
+                language: tree_sitter_rust::language(),
+                name: String::from("Remove type"),
+                node_matcher: |_, n| n.kind().ends_with("type_identifier") || n.kind().ends_with("_type"),
+                replace_with: b"impl Sized".to_vec(),
                 try_match_all_nodes: false,
             }),
             // TODO: Defaultify, like Loopify but generates {Default::default()}
@@ -85,28 +92,12 @@ fn main() -> anyhow::Result<()> {
     )
 }
 
-fn match_any_good_node(_input: &[u8], node: &tree_sitter::Node) -> bool {
-    node.is_named()
-}
-
 fn match_loopifiable(_input: &[u8], node: &tree_sitter::Node) -> bool {
     match node.kind() {
         "block" => true,
         k if k.ends_with("_expression") => true,
         _ => false,
     }
-}
-
-fn match_pub(_input: &[u8], node: &tree_sitter::Node) -> bool {
-    node.kind() == "visibility_modifier"
-}
-
-fn match_comment(_input: &[u8], node: &tree_sitter::Node) -> bool {
-    node.kind().ends_with("_comment")
-}
-
-fn match_items(_input: &[u8], node: &tree_sitter::Node) -> bool {
-    node.kind().ends_with("_item")
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

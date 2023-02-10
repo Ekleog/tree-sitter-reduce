@@ -6,7 +6,10 @@ use tree_sitter::TreeCursor;
 
 use crate::{passes::DichotomyPass, JobStatus, TestResult};
 
-pub struct TreeSitterReplace<F> {
+pub struct TreeSitterReplace<F>
+where
+    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+{
     /// Language to parse the input as
     pub language: tree_sitter::Language,
 
@@ -46,13 +49,19 @@ pub struct TreeSitterReplace<F> {
     pub try_match_all_nodes: bool,
 }
 
-impl<F> Debug for TreeSitterReplace<F> {
+impl<F> Debug for TreeSitterReplace<F>
+where
+    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Tree-Sitter: {}", self.name)
     }
 }
 
-impl<F> Hash for TreeSitterReplace<F> {
+impl<F> Hash for TreeSitterReplace<F>
+where
+    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+{
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.language.hash(state);
         self.name.hash(state);

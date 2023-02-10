@@ -64,7 +64,8 @@ where
         let (parsed, attempts) = match self.list_attempts(workdir, job, kill_trigger)? {
             None => {
                 return Ok(JobStatus::PassFailed(format!(
-                    "Dichotomy pass {self:?} failed to parse file"
+                    "Dichotomy pass {self:?} failed to find replacements in {:?}",
+                    job.path,
                 )))
             }
             Some(r) => r,

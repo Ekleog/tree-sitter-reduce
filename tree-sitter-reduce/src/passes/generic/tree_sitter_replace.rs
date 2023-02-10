@@ -251,6 +251,9 @@ where
         let mut attempts = VecDeque::new();
         let mut aim_at_bytes = interesting.count_bytes();
         let mut cur_bytes = aim_at_bytes;
+        if cur_bytes == 0 {
+            return Ok(None);
+        }
         attempts.push_back(interesting);
         'finished: loop {
             let mut attempt = attempts[attempts.len() - 1].clone();

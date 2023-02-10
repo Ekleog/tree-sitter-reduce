@@ -42,51 +42,53 @@ fn main() -> anyhow::Result<()> {
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Remove random nodes"),
-                node_matcher: |_, n| n.is_named(),
-                replace_with: Vec::new(),
+                node_matcher: |_, n| n.is_named().then(Vec::new),
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Loopify"),
-                node_matcher: match_loopifiable,
-                replace_with: b"{loop{}}".to_vec(),
+                node_matcher: |_, n| {
+                    match n.kind() {
+                        "block" => true,
+                        k if k.ends_with("_expression") => true,
+                        _ => false,
+                    }
+                    .then(|| b"{loop{}}".to_vec())
+                },
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Depublify"),
-                node_matcher: |_, n| n.kind() == "visibility_modifier",
-                replace_with: Vec::new(),
+                node_matcher: |_, n| (n.kind() == "visibility_modifier").then(Vec::new),
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Decommentify"),
-                node_matcher: |_, n| n.kind().ends_with("_comment"),
-                replace_with: Vec::new(),
+                node_matcher: |_, n| n.kind().ends_with("_comment").then(Vec::new),
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Remove items"),
-                node_matcher: |_, n| n.kind().ends_with("_item"),
-                replace_with: Vec::new(),
+                node_matcher: |_, n| n.kind().ends_with("_item").then(Vec::new),
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Remove argument types"),
                 node_matcher: |_, n| {
-                    (n.kind().ends_with("type_identifier") || n.kind().ends_with("_type"))
+                    ((n.kind().ends_with("type_identifier") || n.kind().ends_with("_type"))
                         && n.parent()
                             .and_then(|n| n.parent())
                             .map(|n| {
                                 n.kind() == "function_signature_item" || n.kind() == "function_item"
                             })
-                            .unwrap_or(false)
+                            .unwrap_or(false))
+                    .then(|| b"impl Sized".to_vec())
                 },
-                replace_with: b"impl Sized".to_vec(),
                 try_match_all_nodes: false,
             }),
             // TODO: Defaultify, like Loopify but generates {Default::default()}
@@ -98,14 +100,6 @@ fn main() -> anyhow::Result<()> {
             // [1] https://blog.pnkfx.org/blog/2019/11/18/rust-bug-minimization-patterns/
         ],
     )
-}
-
-fn match_loopifiable(_input: &[u8], node: &tree_sitter::Node) -> bool {
-    match node.kind() {
-        "block" => true,
-        k if k.ends_with("_expression") => true,
-        _ => false,
-    }
 }
 
 fn list_files(root: &Path) -> anyhow::Result<Vec<PathBuf>> {

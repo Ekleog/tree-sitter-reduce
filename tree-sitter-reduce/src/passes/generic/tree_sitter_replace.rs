@@ -8,7 +8,7 @@ use crate::{passes::DichotomyPass, JobStatus, TestResult};
 
 pub struct TreeSitterReplace<F>
 where
-    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+    F: Fn(&[u8], &tree_sitter::Node) -> Option<Vec<u8>>,
 {
     /// Language to parse the input as
     pub language: tree_sitter::Language,
@@ -19,21 +19,11 @@ where
     /// Node matcher
     ///
     /// This is a function that takes as parameter the full file as bytes and
-    /// a tree-sitter `Node`, and returns `true` if this pass should try
-    /// replacing this node by `replace_with`. The byte sequence represented
-    /// by the node under test can be accessed with `&input[node.byte_range()]`
-    ///
-    /// Note that this function is expected to be fast, so for performance
-    /// reasons, even if `try_match_all_nodes` is not set it will actually be
-    /// run on all nodes and its result will be ignored on nodes for which
-    /// `try_match_all_nodes` say they should be ignored.
-    ///
-    /// If this is a problem for you, you should set `try_match_all_nodes` to
-    /// `true` and reimplement its behavior straight in `node_matcher`.
+    /// a tree-sitter `Node`, and returns `Some(replace_with)` if this pass
+    /// should try replacing this node by `replace_with`. The byte sequence
+    /// represented by the node under test can be accessed with
+    /// `&input[node.byte_range()]`
     pub node_matcher: F,
-
-    /// Attempt replacing nodes matched by `node_matcher` by this byte sequence
-    pub replace_with: Vec<u8>,
 
     /// If false (the default), try to match only the nodes that look like they
     /// could cause a reduction
@@ -51,7 +41,7 @@ where
 
 impl<F> Debug for TreeSitterReplace<F>
 where
-    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+    F: Fn(&[u8], &tree_sitter::Node) -> Option<Vec<u8>>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Tree-Sitter: {}", self.name)
@@ -60,13 +50,12 @@ where
 
 impl<F> Hash for TreeSitterReplace<F>
 where
-    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+    F: Fn(&[u8], &tree_sitter::Node) -> Option<Vec<u8>>,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.language.hash(state);
         self.name.hash(state);
         // self.node_matcher.hash(state);
-        self.replace_with.hash(state);
         self.try_match_all_nodes.hash(state);
     }
 }
@@ -74,6 +63,7 @@ where
 #[derive(Clone, Debug)]
 struct InterestingNode {
     bytes: Range<usize>,
+    replace_with: Vec<u8>,
     children: InterestingNodeList,
 }
 
@@ -85,8 +75,11 @@ impl InterestingNodeList {
         self.0.iter().map(|n| n.bytes.len()).sum()
     }
 
-    fn into_ranges(self) -> Vec<Range<usize>> {
-        self.0.into_iter().map(|n| n.bytes).collect()
+    fn into_ranges(self) -> Vec<(Range<usize>, Vec<u8>)> {
+        self.0
+            .into_iter()
+            .map(|n| (n.bytes, n.replace_with))
+            .collect()
     }
 
     fn check_sorted(&self) -> bool {
@@ -171,7 +164,7 @@ impl InterestingNodeList {
 
 impl<F> TreeSitterReplace<F>
 where
-    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+    F: Fn(&[u8], &tree_sitter::Node) -> Option<Vec<u8>>,
 {
     fn collect_all_interesting(
         &self,
@@ -185,21 +178,28 @@ where
         loop {
             let node = cursor.node();
             let bytes = &input[node.byte_range()];
-            let node_is_interesting = (self.node_matcher)(input, &node)
-                && (self.try_match_all_nodes
-                    || (!bytes.iter().all(u8::is_ascii_whitespace)
-                        && !self.replace_with.windows(bytes.len()).any(|b| b == bytes)));
-            if !node_is_interesting {
+            if !self.try_match_all_nodes && bytes.iter().all(u8::is_ascii_whitespace) {
                 // Not-interesting node, just recurse
                 self.collect_all_interesting(input, &mut *cursor, &mut *interesting);
+            } else if let Some(replace_with) = (self.node_matcher)(&input, &node) {
+                if self.try_match_all_nodes
+                    || !replace_with.windows(bytes.len()).any(|b| b == bytes)
+                {
+                    // Interesting node, add to our list and recurse inside
+                    let mut new_node = Box::new(InterestingNode {
+                        bytes: node.byte_range(),
+                        replace_with,
+                        children: InterestingNodeList(VecDeque::new()),
+                    });
+                    self.collect_all_interesting(input, &mut *cursor, &mut new_node.children);
+                    interesting.0.push_back(new_node);
+                } else {
+                    // Not-interesting node, just recurse
+                    self.collect_all_interesting(input, &mut *cursor, &mut *interesting);
+                }
             } else {
-                // Interesting node, add to our list and recurse inside
-                let mut new_node = Box::new(InterestingNode {
-                    bytes: node.byte_range(),
-                    children: InterestingNodeList(VecDeque::new()),
-                });
-                self.collect_all_interesting(input, &mut *cursor, &mut new_node.children);
-                interesting.0.push_back(new_node);
+                // Not-interesting node, just recurse
+                self.collect_all_interesting(input, &mut *cursor, &mut *interesting);
             }
             if !cursor.goto_next_sibling() {
                 break;
@@ -214,9 +214,10 @@ where
 
 impl<F> DichotomyPass for TreeSitterReplace<F>
 where
-    F: Fn(&[u8], &tree_sitter::Node) -> bool,
+    F: Fn(&[u8], &tree_sitter::Node) -> Option<Vec<u8>>,
 {
-    type Attempt = Vec<Range<usize>>; // List of byte ranges to replace
+    // List of byte ranges to replace and the value to replace with
+    type Attempt = Vec<(Range<usize>, Vec<u8>)>;
 
     type Parsed = Vec<u8>;
 
@@ -312,16 +313,16 @@ where
     ) -> anyhow::Result<crate::JobStatus> {
         let path = workdir.join(&job.path);
 
-        let removed_size = attempt.iter().map(Range::len).sum::<usize>();
-        let replacement_size = attempt.len() * self.replace_with.len();
+        let removed_size = attempt.iter().map(|(b, _)| b.len()).sum::<usize>();
 
-        let mut new_data =
-            Vec::with_capacity(file_contents.len() - removed_size + replacement_size);
+        let mut new_data = Vec::with_capacity(file_contents.len() - removed_size);
         let mut file_cursor = 0;
-        for r in attempt.iter() {
-            new_data.extend_from_slice(&file_contents[file_cursor..r.start]);
-            new_data.extend_from_slice(&self.replace_with);
-            file_cursor = r.end;
+        let mut replacement_size = 0;
+        for (range, replace_with) in attempt.iter() {
+            new_data.extend_from_slice(&file_contents[file_cursor..range.start]);
+            new_data.extend_from_slice(&replace_with);
+            replacement_size += replace_with.len();
+            file_cursor = range.end;
         }
         new_data.extend_from_slice(&file_contents[file_cursor..]);
 

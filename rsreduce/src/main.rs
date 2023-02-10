@@ -76,8 +76,16 @@ fn main() -> anyhow::Result<()> {
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
-                name: String::from("Remove type"),
-                node_matcher: |_, n| n.kind().ends_with("type_identifier") || n.kind().ends_with("_type"),
+                name: String::from("Remove argument types"),
+                node_matcher: |_, n| {
+                    (n.kind().ends_with("type_identifier") || n.kind().ends_with("_type"))
+                        && n.parent()
+                            .and_then(|n| n.parent())
+                            .map(|n| {
+                                n.kind() == "function_signature_item" || n.kind() == "function_item"
+                            })
+                            .unwrap_or(false)
+                },
                 replace_with: b"impl Sized".to_vec(),
                 try_match_all_nodes: false,
             }),

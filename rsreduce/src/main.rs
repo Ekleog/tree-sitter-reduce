@@ -5,7 +5,10 @@ use std::{
 
 use anyhow::Context;
 use structopt::StructOpt;
-use tree_sitter_reduce::{passes::generic::TreeSitterReplace, ShellTest};
+use tree_sitter_reduce::{
+    passes::generic::{DiscardWhitespace, TreeSitterReplace},
+    ShellTest,
+};
 
 #[derive(Debug, structopt::StructOpt)]
 struct Opt {
@@ -39,6 +42,7 @@ fn main() -> anyhow::Result<()> {
         list_files,
         test,
         &[
+            Arc::new(DiscardWhitespace),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Remove random nodes"),

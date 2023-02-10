@@ -166,6 +166,9 @@ impl<F> TreeSitterReplace<F>
 where
     F: Fn(&[u8], &tree_sitter::Node) -> Option<Vec<u8>>,
 {
+    // TODO: refactor to use tree_sitter::QueryCursor::matches
+    // Then the API can change to expose directly setting a tree-sitter query string and
+    // then a function to know what to replace the returned captures list
     fn collect_all_interesting(
         &self,
         input: &[u8],

@@ -6,6 +6,10 @@ use crate::{Job, JobStatus, Pass, Test};
 ///
 /// See the documentation for `Pass` for all the details; this documentation only
 /// contains the differences to there.
+// TODO: Have Dichotomy's list_attempts return a list of `OneAttemptPass`, that
+// basically only indicate how to edit the file to try out the pass. Also refactor
+// DiscardWhitespace to use OneAttemptPass. OneAttemptPass can then auto-impl Pass
+// by running the test at the end.
 pub trait DichotomyPass {
     type Attempt;
     type Parsed;

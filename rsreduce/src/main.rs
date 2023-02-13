@@ -82,6 +82,12 @@ fn main() -> anyhow::Result<()> {
             }),
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
+                name: String::from("Remove use declarations"),
+                node_matcher: |_, n| (n.kind() == "use_declaration").then(Vec::new),
+                try_match_all_nodes: false,
+            }),
+            Arc::new(TreeSitterReplace {
+                language: tree_sitter_rust::language(),
                 name: String::from("Remove argument types"),
                 node_matcher: |_, n| {
                     ((n.kind().ends_with("type_identifier") || n.kind().ends_with("_type"))

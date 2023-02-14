@@ -77,7 +77,9 @@ fn main() -> anyhow::Result<()> {
             Arc::new(TreeSitterReplace {
                 language: tree_sitter_rust::language(),
                 name: String::from("Remove items"),
-                node_matcher: |_, n| n.kind().ends_with("_item").then(Vec::new),
+                node_matcher: |_, n| {
+                    (n.kind().ends_with("_item") || n.kind() == "macro_definition").then(Vec::new)
+                },
                 try_match_all_nodes: false,
             }),
             Arc::new(TreeSitterReplace {

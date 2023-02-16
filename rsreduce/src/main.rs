@@ -120,8 +120,10 @@ fn main() -> anyhow::Result<()> {
                 },
                 try_match_all_nodes: false,
             }),
-            // TODO: Defaultify, like Loopify but generates {Default::default()}
+            // TODO: Remove struct fields
             // TODO: Replace match branches with a default branch (that loops)
+            // TODO: Do not try removing argument types in trait methods
+            // TODO: Defaultify, like Loopify but generates {Default::default()}
             // TODO: Figure out a way to use LSP to delete all unused things?
             // TODO: Try to figure out more things from [1] that could be automated
             // [1] https://blog.pnkfx.org/blog/2019/11/18/rust-bug-minimization-patterns/
